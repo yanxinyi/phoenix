@@ -23,10 +23,17 @@ import static org.junit.Assert.fail;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.sql.Connection;
 import java.util.Properties;
 
+import org.apache.hadoop.hbase.HBaseTestingUtility;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.Admin;
+import org.apache.hadoop.hbase.client.ColumnFamilyDescriptorBuilder;
+import org.apache.hadoop.hbase.client.TableDescriptorBuilder;
 import org.apache.phoenix.exception.SQLExceptionCode;
 import org.apache.phoenix.jdbc.PhoenixConnection;
+import org.apache.phoenix.mapreduce.util.ConnectionUtil;
 import org.apache.phoenix.query.BaseConnectionlessQueryTest;
 import org.apache.phoenix.schema.ColumnNotFoundException;
 import org.apache.phoenix.schema.PTable;
@@ -114,5 +121,50 @@ public class ViewCompilerTest extends BaseConnectionlessQueryTest {
         } catch (SQLException e) {
             assertEquals(SQLExceptionCode.CANNOT_UPDATE_VIEW_COLUMN.getErrorCode(), e.getErrorCode());
         }
+    }
+
+    @Test
+    public void testCreateViewFromHBaseTable() throws Exception {
+        String tableNameStr = "testCreateViewFromHBaseTable";
+        String familyNameStr = "dummy";
+        HBaseTestingUtility testUtil = new HBaseTestingUtility();
+        testUtil.startMiniCluster(1);
+        Admin admin = testUtil.getAdmin();
+        TableDescriptorBuilder builder = TableDescriptorBuilder.newBuilder(
+                TableName.valueOf(tableNameStr));
+        builder.setColumnFamily(ColumnFamilyDescriptorBuilder.of(familyNameStr));
+        admin.createTable(builder.build());
+        Connection conn = ConnectionUtil.getInputConnection(testUtil.getConfiguration());
+
+        //PK is not specified, without where clause
+        try {
+            conn.createStatement().executeUpdate("CREATE VIEW \"" + tableNameStr +
+                    "\" (ROWKEY VARCHAR, \"" + familyNameStr + "\".a VARCHAR)");
+            fail();
+        } catch (SQLException e) {
+            assertEquals(SQLExceptionCode.PRIMARY_KEY_MISSING.getErrorCode(), e.getErrorCode());
+        }
+
+        // No error, as PK is specified
+        conn.createStatement().executeUpdate("CREATE VIEW \"" + tableNameStr +
+                "\" (ROWKEY VARCHAR PRIMARY KEY, \"" + familyNameStr + "\".a VARCHAR)");
+
+        conn.createStatement().executeUpdate("DROP VIEW \"" + tableNameStr + "\"");
+
+        //PK is not specified, with where clause
+        try {
+            conn.createStatement().executeUpdate("CREATE VIEW \"" + tableNameStr +
+                    "\" (ROWKEY VARCHAR, \"" + familyNameStr + "\".a VARCHAR) AS SELECT * FROM \""
+                            + tableNameStr + "\" WHERE ROWKEY = '1'");
+            fail();
+        } catch (SQLException e) {
+            assertEquals(SQLExceptionCode.PRIMARY_KEY_MISSING.getErrorCode(), e.getErrorCode());
+        }
+
+        conn.createStatement().executeUpdate("CREATE VIEW \"" + tableNameStr +
+                "\" (ROWKEY VARCHAR PRIMARY KEY, \"" + familyNameStr + "\".a VARCHAR) AS SELECT " +
+                "* FROM \"" + tableNameStr + "\" WHERE ROWKEY = '1'");
+
+        conn.createStatement().executeUpdate("DROP VIEW \"" + tableNameStr + "\"");
     }
 }
