@@ -128,6 +128,24 @@ public class CreateTableCompiler {
             viewTypeToBe = parentToBe.getViewType() == ViewType.MAPPED ? ViewType.MAPPED : ViewType.UPDATABLE;
             if (whereNode == null) {
                 viewStatementToBe = parentToBe.getViewStatement();
+
+                if (viewTypeToBe == ViewType.MAPPED && parentToBe.getPKColumns().size() == 0) {
+                    boolean isPKMissed = true;
+                    if (pkConstraint.getColumnNames().size() > 0) {
+                        isPKMissed = false;
+                    } else {
+                        for (ColumnDef columnDef: columnDefs) {
+                            if (columnDef.isPK()){
+                                isPKMissed = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (isPKMissed) {
+                        throw new SQLExceptionInfo.Builder(SQLExceptionCode.PRIMARY_KEY_MISSING)
+                                .build().buildException();
+                    }
+                }
             } else {
                 whereNode = StatementNormalizer.normalize(whereNode, resolver);
                 if (whereNode.isStateless()) {
