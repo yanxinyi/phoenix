@@ -155,7 +155,7 @@ public class ViewCompilerTest extends BaseConnectionlessQueryTest {
         try {
             conn.createStatement().executeUpdate("CREATE VIEW \"" + tableNameStr +
                     "\" (ROWKEY VARCHAR, \"" + familyNameStr + "\".a VARCHAR) AS SELECT * FROM \""
-                            + tableNameStr + "\" WHERE ROWKEY = '1'");
+                    + tableNameStr + "\" WHERE ROWKEY = '1'");
             fail();
         } catch (SQLException e) {
             assertEquals(SQLExceptionCode.PRIMARY_KEY_MISSING.getErrorCode(), e.getErrorCode());
