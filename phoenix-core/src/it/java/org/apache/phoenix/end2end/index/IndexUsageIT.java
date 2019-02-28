@@ -35,6 +35,7 @@ import java.sql.SQLException;
 import java.util.Properties;
 
 import org.apache.phoenix.end2end.ParallelStatsDisabledIT;
+import org.apache.phoenix.exception.SQLExceptionCode;
 import org.apache.phoenix.execute.CommitException;
 import org.apache.phoenix.query.QueryConstants;
 import org.apache.phoenix.util.DateUtil;
@@ -772,4 +773,24 @@ public class IndexUsageIT extends ParallelStatsDisabledIT {
         }
 	}
 
+    @Test
+    public void testIndexTableNotFound() throws Exception{
+        Properties props = PropertiesUtil.deepCopy(TEST_PROPERTIES);
+        Connection conn = DriverManager.getConnection(getUrl(), props);
+        String dataTableName = generateUniqueName();
+        String wrongIndexName = generateUniqueName();
+
+        try {
+            conn.createStatement().execute(
+                    "CREATE TABLE " + dataTableName + " (k VARCHAR NOT NULL PRIMARY KEY, v VARCHAR)");
+
+            conn.createStatement().execute(
+                    "ALTER INDEX " + wrongIndexName + " ON " + dataTableName + " rebuild");
+
+        }catch (SQLException e) {
+            assertEquals(e.getErrorCode(), SQLExceptionCode.INDEX_UNDEFINED.getErrorCode());
+        } finally {
+            conn.close();
+        }
+    }
 }

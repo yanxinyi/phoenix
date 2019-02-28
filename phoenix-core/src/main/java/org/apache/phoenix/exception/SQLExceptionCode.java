@@ -225,6 +225,12 @@ public enum SQLExceptionCode {
             return new TableNotFoundException(info.getSchemaName(), info.getTableName());
         }
     }),
+    INDEX_UNDEFINED(1042, "42M06", "Index undefined.", new Factory() {
+        @Override
+        public SQLException newException(SQLExceptionInfo info) {
+            return new IndexNotFoundException(info.getSchemaName(), info.getTableName());
+        }
+    }),
     TABLE_ALREADY_EXIST(1013, "42M04", "Table already exists.", new Factory() {
         @Override
         public SQLException newException(SQLExceptionInfo info) {

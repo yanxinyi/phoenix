@@ -4281,7 +4281,13 @@ public class MetaDataClient {
             String indexName = statement.getTable().getName().getTableName();
             boolean isAsync = statement.isAsync();
             String tenantId = connection.getTenantId() == null ? null : connection.getTenantId().getString();
-            PTable table = FromCompiler.getResolver(statement, connection).getTables().get(0).getTable();
+            PTable table;
+            try {
+                table = FromCompiler.getResolver(statement, connection).getTables().get(0).getTable();
+            } catch (TableNotFoundException e) {
+                throw new IndexNotFoundException(e.getTableName());
+            }
+
             String schemaName = statement.getTable().getName().getSchemaName();
             String tableName = table.getTableName().getString();
 
