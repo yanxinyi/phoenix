@@ -31,8 +31,6 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.MiniHBaseCluster;
@@ -74,6 +72,8 @@ import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Multimap;
 
@@ -85,7 +85,7 @@ import com.google.common.collect.Multimap;
 
 public class TestWALRecoveryCaching {
 
-  private static final Log LOG = LogFactory.getLog(TestWALRecoveryCaching.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestWALRecoveryCaching.class);
   private static final long ONE_SEC = 1000;
   private static final long ONE_MIN = 60 * ONE_SEC;
   private static final long TIMEOUT = ONE_MIN;

@@ -22,8 +22,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentMap;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -57,6 +55,8 @@ import org.apache.phoenix.schema.stats.StatisticsCollector;
 import org.apache.phoenix.schema.stats.StatisticsWriter;
 import org.apache.phoenix.util.ScanUtil;
 import org.apache.phoenix.util.SchemaUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
@@ -65,7 +65,7 @@ import java.util.Properties;
  */
 public class SnapshotScanner extends AbstractClientScanner {
 
-  private static final Log LOG = LogFactory.getLog(SnapshotScanner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SnapshotScanner.class);
   private final Scan scan;
   private RegionScanner scanner;
   private HRegion region;

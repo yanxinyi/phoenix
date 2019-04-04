@@ -22,8 +22,6 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Scan;
@@ -51,6 +49,8 @@ import org.apache.phoenix.mapreduce.util.PhoenixConfigurationUtil;
 import org.apache.phoenix.monitoring.ReadMetricQueue;
 import org.apache.phoenix.monitoring.ScanMetricsHolder;
 import org.apache.phoenix.query.ConnectionQueryServices;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -61,7 +61,7 @@ import com.google.common.collect.Lists;
  */
 public class PhoenixRecordReader<T extends DBWritable> extends RecordReader<NullWritable,T> {
     
-    private static final Log LOG = LogFactory.getLog(PhoenixRecordReader.class);
+    private static final Logger LOG = LoggerFactory.getLogger(PhoenixRecordReader.class);
     protected final Configuration  configuration;
     protected final QueryPlan queryPlan;
     private NullWritable key =  NullWritable.get();
