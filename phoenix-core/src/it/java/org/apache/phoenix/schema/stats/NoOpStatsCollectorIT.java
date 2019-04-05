@@ -52,7 +52,7 @@ import static org.apache.phoenix.util.TestUtil.TEST_PROPERTIES;
 @Category(NeedsOwnMiniClusterTest.class)
 public class NoOpStatsCollectorIT extends ParallelStatsDisabledIT {
 
-    private static final Logger LOG = LoggerFactory.getLogger(NoOpStatsCollectorIT.class);
+    private static final Logger logger = LoggerFactory.getLogger(NoOpStatsCollectorIT.class);
 
     private String fullTableName;
     private String physicalTableName;
@@ -89,7 +89,7 @@ public class NoOpStatsCollectorIT extends ParallelStatsDisabledIT {
     @Test
     public void testStatsCollectionViaSql() throws SQLException {
         String updateStatisticsSql = "UPDATE STATISTICS " + fullTableName;
-        LOG.info("Running SQL to collect stats: " + updateStatisticsSql);
+        logger.info("Running SQL to collect stats: " + updateStatisticsSql);
         Statement stmt = conn.createStatement();
         try {
             stmt.execute(updateStatisticsSql);
@@ -107,7 +107,7 @@ public class NoOpStatsCollectorIT extends ParallelStatsDisabledIT {
      */
     @Test
     public void testStatsCollectionDuringMajorCompaction() throws Exception {
-        LOG.info("Running major compaction on table: " + physicalTableName);
+        logger.info("Running major compaction on table: " + physicalTableName);
         TestUtil.doMajorCompaction(conn, physicalTableName);
 
         String q1 = "SELECT SUM(GUIDE_POSTS_ROW_COUNT) FROM SYSTEM.STATS WHERE PHYSICAL_NAME = '" + physicalTableName + "'";

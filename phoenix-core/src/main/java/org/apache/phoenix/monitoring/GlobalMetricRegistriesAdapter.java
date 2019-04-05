@@ -48,7 +48,7 @@ import org.slf4j.LoggerFactory;
  */
 public class GlobalMetricRegistriesAdapter {
 
-    private static final Logger LOG = LoggerFactory.getLogger(GlobalMetricRegistriesAdapter.class);
+    private static final Logger logger = LoggerFactory.getLogger(GlobalMetricRegistriesAdapter.class);
     private static GlobalMetricRegistriesAdapter INSTANCE = new GlobalMetricRegistriesAdapter();
 
     private GlobalMetricRegistriesAdapter() {
@@ -62,7 +62,7 @@ public class GlobalMetricRegistriesAdapter {
 
     public void registerMetricRegistry(MetricRegistry registry) {
         if (registry == null) {
-            LOG.warn("Registry cannot be registered with Hadoop Metrics 2 since it is null.");
+            logger.warn("Registry cannot be registered with Hadoop Metrics 2 since it is null.");
             return;
         }
 
@@ -74,7 +74,7 @@ public class GlobalMetricRegistriesAdapter {
      * Class to convert HBase Metric Objects to Hadoop Metrics2 Metric Objects
      */
     private static class HBaseMetrics2HadoopMetricsAdapter implements MetricsSource {
-        private static final Logger LOG =
+        private static final Logger logger =
                 LoggerFactory.getLogger(HBaseMetrics2HadoopMetricsAdapter.class);
         private final MetricRegistry registry;
         private final String metricTag;
@@ -86,7 +86,7 @@ public class GlobalMetricRegistriesAdapter {
 
         private void registerToDefaultMetricsSystem() {
             MetricRegistryInfo info = registry.getMetricRegistryInfo();
-            LOG.info("Registering " + info.getMetricsJmxContext() + " " + info.getMetricsDescription() + " into DefaultMetricsSystem");
+            logger.info("Registering " + info.getMetricsJmxContext() + " " + info.getMetricsDescription() + " into DefaultMetricsSystem");
             DefaultMetricsSystem.instance().register(info.getMetricsJmxContext(), info.getMetricsDescription(), this);
         }
 
@@ -118,7 +118,7 @@ public class GlobalMetricRegistriesAdapter {
                 } else if (metric instanceof Timer) {
                     this.addTimer(name, (Timer)metric, builder);
                 } else {
-                    LOG.info("Ignoring unknown Metric class " + metric.getClass().getName());
+                    logger.info("Ignoring unknown Metric class " + metric.getClass().getName());
                 }
             }
         }
@@ -135,7 +135,7 @@ public class GlobalMetricRegistriesAdapter {
             } else if (o instanceof Double) {
                 builder.addGauge(info, (Double)o);
             } else {
-                LOG.warn("Ignoring Gauge (" + name + ") with unhandled type: " + o.getClass());
+                logger.warn("Ignoring Gauge (" + name + ") with unhandled type: " + o.getClass());
             }
 
         }

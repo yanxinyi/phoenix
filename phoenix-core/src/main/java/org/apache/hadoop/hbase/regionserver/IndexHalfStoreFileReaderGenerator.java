@@ -73,7 +73,7 @@ import com.google.common.collect.Lists;
 public class IndexHalfStoreFileReaderGenerator implements RegionObserver, RegionCoprocessor{
     
     private static final String LOCAL_INDEX_AUTOMATIC_REPAIR = "local.index.automatic.repair";
-    public static final Logger LOG =
+    public static final Logger logger =
             LoggerFactory.getLogger(IndexHalfStoreFileReaderGenerator.class);
 
     @Override
@@ -201,10 +201,10 @@ public class IndexHalfStoreFileReaderGenerator implements RegionObserver, Region
         if (!store.hasReferences()) {
             InternalScanner repairScanner = null;
             if (request.isMajor() && (!RepairUtil.isLocalIndexStoreFilesConsistent(c.getEnvironment(), store))) {
-                LOG.info("we have found inconsistent data for local index for region:"
+                logger.info("we have found inconsistent data for local index for region:"
                         + c.getEnvironment().getRegion().getRegionInfo());
                 if (c.getEnvironment().getConfiguration().getBoolean(LOCAL_INDEX_AUTOMATIC_REPAIR, true)) {
-                    LOG.info("Starting automatic repair of local Index for region:"
+                    logger.info("Starting automatic repair of local Index for region:"
                             + c.getEnvironment().getRegion().getRegionInfo());
                     repairScanner = getRepairScanner(c.getEnvironment(), store);
                 }

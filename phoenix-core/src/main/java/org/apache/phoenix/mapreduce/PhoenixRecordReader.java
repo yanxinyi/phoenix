@@ -61,7 +61,7 @@ import com.google.common.collect.Lists;
  */
 public class PhoenixRecordReader<T extends DBWritable> extends RecordReader<NullWritable,T> {
     
-    private static final Logger LOG = LoggerFactory.getLogger(PhoenixRecordReader.class);
+    private static final Logger logger = LoggerFactory.getLogger(PhoenixRecordReader.class);
     protected final Configuration  configuration;
     protected final QueryPlan queryPlan;
     private NullWritable key =  NullWritable.get();
@@ -84,7 +84,7 @@ public class PhoenixRecordReader<T extends DBWritable> extends RecordReader<Null
            try {
                resultIterator.close();
         } catch (SQLException e) {
-           LOG.error(" Error closing resultset.");
+           logger.error(" Error closing resultset.");
            throw new RuntimeException(e);
         }
        }
@@ -110,7 +110,7 @@ public class PhoenixRecordReader<T extends DBWritable> extends RecordReader<Null
         final PhoenixInputSplit pSplit = (PhoenixInputSplit)split;
         final List<Scan> scans = pSplit.getScans();
         try {
-            LOG.info("Generating iterators for " + scans.size() + " scans in keyrange: " + pSplit.getKeyRange());
+            logger.info("Generating iterators for " + scans.size() + " scans in keyrange: " + pSplit.getKeyRange());
             List<PeekingResultIterator> iterators = Lists.newArrayListWithExpectedSize(scans.size());
             StatementContext ctx = queryPlan.getContext();
             ReadMetricQueue readMetrics = ctx.getReadMetricsQueue();
@@ -136,7 +136,7 @@ public class PhoenixRecordReader<T extends DBWritable> extends RecordReader<Null
                   final TableSnapshotResultIterator tableSnapshotResultIterator = new TableSnapshotResultIterator(configuration, scan,
                       scanMetricsHolder);
                     peekingResultIterator = LookAheadResultIterator.wrap(tableSnapshotResultIterator);
-                    LOG.info("Adding TableSnapshotResultIterator for scan: " + scan);
+                    logger.info("Adding TableSnapshotResultIterator for scan: " + scan);
                 } else {
                   final TableResultIterator tableResultIterator =
                       new TableResultIterator(
@@ -144,7 +144,7 @@ public class PhoenixRecordReader<T extends DBWritable> extends RecordReader<Null
                           scanMetricsHolder, renewScannerLeaseThreshold, queryPlan,
                           MapReduceParallelScanGrouper.getInstance());
                   peekingResultIterator = LookAheadResultIterator.wrap(tableResultIterator);
-                  LOG.info("Adding TableResultIterator for scan: " + scan);
+                  logger.info("Adding TableResultIterator for scan: " + scan);
                 }
                 iterators.add(peekingResultIterator);
             }
@@ -158,7 +158,7 @@ public class PhoenixRecordReader<T extends DBWritable> extends RecordReader<Null
 
             this.resultSet = new PhoenixResultSet(this.resultIterator, queryPlan.getProjector().cloneIfNecessary(), queryPlan.getContext());
         } catch (SQLException e) {
-            LOG.error(String.format(" Error [%s] initializing PhoenixRecordReader. ",e.getMessage()));
+            logger.error(String.format(" Error [%s] initializing PhoenixRecordReader. ",e.getMessage()));
             Throwables.propagate(e);
         }
    }
@@ -179,7 +179,7 @@ public class PhoenixRecordReader<T extends DBWritable> extends RecordReader<Null
             value.readFields(resultSet);
             return true;
         } catch (SQLException e) {
-            LOG.error(String.format(" Error [%s] occurred while iterating over the resultset. ",e.getMessage()));
+            logger.error(String.format(" Error [%s] occurred while iterating over the resultset. ",e.getMessage()));
             throw new RuntimeException(e);
         }
     }

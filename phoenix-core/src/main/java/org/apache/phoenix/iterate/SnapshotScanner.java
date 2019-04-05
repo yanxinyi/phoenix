@@ -65,7 +65,7 @@ import java.util.Properties;
  */
 public class SnapshotScanner extends AbstractClientScanner {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SnapshotScanner.class);
+  private static final Logger logger = LoggerFactory.getLogger(SnapshotScanner.class);
   private final Scan scan;
   private RegionScanner scanner;
   private HRegion region;
@@ -75,7 +75,7 @@ public class SnapshotScanner extends AbstractClientScanner {
   public SnapshotScanner(Configuration conf, FileSystem fs, Path rootDir,
       TableDescriptor htd, RegionInfo hri,  Scan scan) throws Throwable{
 
-    LOG.info("Creating SnapshotScanner for region: " + hri);
+    logger.info("Creating SnapshotScanner for region: " + hri);
 
     scan.setIsolationLevel(IsolationLevel.READ_UNCOMMITTED);
     values = new ArrayList<>();
@@ -129,7 +129,7 @@ public class SnapshotScanner extends AbstractClientScanner {
         this.scanner.close();
         this.scanner = null;
       } catch (IOException e) {
-        LOG.warn("Exception while closing scanner", e);
+        logger.warn("Exception while closing scanner", e);
       }
     }
     if (this.region != null) {
@@ -138,7 +138,7 @@ public class SnapshotScanner extends AbstractClientScanner {
         this.region.close(true);
         this.region = null;
       } catch (IOException e) {
-        LOG.warn("Exception while closing scanner", e);
+        logger.warn("Exception while closing scanner", e);
       }
     }
   }

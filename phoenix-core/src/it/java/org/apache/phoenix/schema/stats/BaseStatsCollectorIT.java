@@ -97,7 +97,7 @@ import com.google.common.collect.Maps;
 @RunWith(Parameterized.class)
 public abstract class BaseStatsCollectorIT extends BaseUniqueNamesOwnClusterIT {
 
-    private static final Logger LOG = LoggerFactory.getLogger(BaseStatsCollectorIT.class);
+    private static final Logger logger = LoggerFactory.getLogger(BaseStatsCollectorIT.class);
 
     private final String tableDDLOptions;
     private final boolean columnEncoded;
@@ -198,7 +198,7 @@ public abstract class BaseStatsCollectorIT extends BaseUniqueNamesOwnClusterIT {
             if (guidePostWidth != null) {
                 updateStatisticsSql += " SET \"" + QueryServices.STATS_GUIDEPOST_WIDTH_BYTES_ATTRIB + "\" = " + guidePostWidth;
             }
-            LOG.info("Running SQL to collect stats: " + updateStatisticsSql);
+            logger.info("Running SQL to collect stats: " + updateStatisticsSql);
             conn.createStatement().execute(updateStatisticsSql);
         }
     }
