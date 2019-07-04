@@ -260,6 +260,7 @@ public abstract class MetaDataProtocol extends MetaDataService {
         private PTable table;
         private List<byte[]> tableNamesToDelete;
         private List<SharedTableState> sharedTablesToDelete;
+        private List<PTable> sharedPTablesToDelete;
         private byte[] columnName;
         private byte[] familyName;
         private boolean wasUpdated;
@@ -321,6 +322,15 @@ public abstract class MetaDataProtocol extends MetaDataService {
             this.sharedTablesToDelete = sharedTablesToDelete;
         }
 
+        public MetaDataMutationResult(MutationCode returnCode, long currentTime, PTable table,
+                                      List<byte[]> tableNamesToDelete,
+                                      List<SharedTableState> sharedTablesToDelete,
+                                      List<PTable> sharedPTablesToDelete) {
+            this(returnCode, currentTime, table, tableNamesToDelete);
+            this.sharedPTablesToDelete = sharedPTablesToDelete;
+            this.sharedTablesToDelete = sharedTablesToDelete;
+        }
+
         public MutationCode getMutationCode() {
             return returnCode;
         }
@@ -365,6 +375,9 @@ public abstract class MetaDataProtocol extends MetaDataService {
             return sharedTablesToDelete;
         }
 
+        public List<PTable> getSharedPTablesToDelete() {
+            return sharedPTablesToDelete;
+        }
         public long getAutoPartitionNum() {
             return autoPartitionNum;
         }
@@ -469,6 +482,7 @@ public abstract class MetaDataProtocol extends MetaDataService {
                 builder.addSharedTablesToDelete(sharedTableStateBuilder.build());
               }
             }
+
             if (result.getSchema() != null) {
               builder.setSchema(PSchema.toProto(result.schema));
             }
