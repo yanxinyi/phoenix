@@ -149,6 +149,15 @@ public final class PhoenixMapReduceUtil {
         setSnapshotInput(job, inputClass, snapshotName, tableName, restoreDir, SchemaType.QUERY);
     }
 
+    public static void setInput(String tableName,final Job job,
+                                final Class<? extends DBWritable> inputClass) {
+        job.setInputFormatClass(PhoenixInputFormat.class);
+        final Configuration configuration = job.getConfiguration();
+        PhoenixConfigurationUtil.setInputClass(configuration, inputClass);
+        PhoenixConfigurationUtil.setInputTableName(configuration, tableName);
+        PhoenixConfigurationUtil.setSchemaType(configuration, SchemaType.QUERY);
+    }
+
     /**
      *
      * @param job

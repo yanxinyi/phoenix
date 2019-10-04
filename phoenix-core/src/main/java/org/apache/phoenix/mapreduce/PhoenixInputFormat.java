@@ -184,6 +184,7 @@ public class PhoenixInputFormat<T extends DBWritable> extends InputFormat<NullWr
               String selectStatement;
               switch (mrJobType) {
                   case UPDATE_STATS:
+                  case VIEW_TTL_DELETE:
                       // This select statement indicates MR job for full table scan for stats collection
                       selectStatement = "SELECT * FROM " + PhoenixConfigurationUtil.getInputTableName(configuration);
                       break;

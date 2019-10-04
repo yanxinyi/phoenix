@@ -43,7 +43,6 @@ import org.apache.phoenix.iterate.BaseResultIterators;
 import org.apache.phoenix.jdbc.PhoenixConnection;
 import org.apache.phoenix.mapreduce.FormatToBytesWritableMapper;
 import org.apache.phoenix.mapreduce.ImportPreUpsertKeyValueProcessor;
-import org.apache.phoenix.mapreduce.PhoenixInputFormat;
 import org.apache.phoenix.mapreduce.index.IndexScrutinyTool.OutputFormat;
 import org.apache.phoenix.mapreduce.index.IndexScrutinyTool.SourceTable;
 import org.apache.phoenix.query.QueryServices;
@@ -167,7 +166,8 @@ public final class PhoenixConfigurationUtil {
      */
     public enum MRJobType {
         QUERY,
-        UPDATE_STATS
+        UPDATE_STATS,
+        VIEW_TTL_DELETE
     }
 
     public enum SchemaType {
@@ -425,7 +425,6 @@ public final class PhoenixConfigurationUtil {
         configuration.set(SELECT_STATEMENT, selectStmt);
         return selectStmt;
     }
-
 
     public static long getBatchSize(final Configuration configuration) throws SQLException {
         Preconditions.checkNotNull(configuration);
