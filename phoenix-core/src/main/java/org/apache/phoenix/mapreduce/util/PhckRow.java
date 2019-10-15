@@ -20,18 +20,18 @@ package org.apache.phoenix.mapreduce.util;
 import java.sql.ResultSet;
 
 public class PhckRow {
-    String tenantId;
-    String tableSchema;
-    String tableName;
-    String tableType;
-    String columnFamily;
-    String columnName;
-    String columnCount;
-    String linkType;
-    String indexState;
-    String indexType;
-    String viewType;
-    String qualifierCounter;
+    private String tenantId;
+    private String tableSchema;
+    private String tableName;
+    private String tableType;
+    private String columnFamily;
+    private String columnName;
+    private String columnCount;
+    private String linkType;
+    private String indexState;
+    private String indexType;
+    private String viewType;
+    private String qualifierCounter;
 
     public PhckRow(ResultSet resultSet) throws Exception {
         this.tenantId = resultSet.getString(1);
@@ -64,4 +64,51 @@ public class PhckRow {
         return this.linkType != null && this.columnFamily != null;
     }
 
+    public String getTenantId() {
+        return this.tenantId;
+    }
+
+    public String getTableSchema() {
+        return this.tableSchema;
+    }
+
+    public String getTableName() {
+        return tableName;
+    }
+
+    public String getTableType() {
+        return tableType;
+    }
+
+    public String getColumnFamily() {
+        return columnFamily;
+    }
+
+    public String getColumnName() {
+        return columnName;
+    }
+
+    public String getColumnCount() {
+        return columnCount;
+    }
+
+    public String getLinkType() {
+        return linkType;
+    }
+
+    public String getIndexState() {
+        return indexState;
+    }
+
+    public String getIndexType() {
+        return indexType;
+    }
+
+    public String getViewType() {
+        return viewType;
+    }
+
+    public String getQualifierCounter() {
+        return qualifierCounter;
+    }
 }

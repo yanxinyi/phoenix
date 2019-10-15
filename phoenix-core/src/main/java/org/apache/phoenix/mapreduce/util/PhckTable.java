@@ -40,7 +40,7 @@ public class PhckTable {
     List<PhckTable> children;
 
     public PhckTable(String tenantId, String tableSchema, String tableName, PTableType tableType,
-                 int headRowColumnCount) {
+                     int headRowColumnCount) {
         this.tenantId = tenantId;
         this.tableSchema = tableSchema;
         this.tableName = tableName;
@@ -55,6 +55,42 @@ public class PhckTable {
         }
 
         return parent.getHeadRowColumnCount();
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public String getTableSchema() {
+        return tableSchema;
+    }
+
+    public String getTableName() {
+        return tableName;
+    }
+
+    public PTableType getTableType() {
+        return tableType;
+    }
+
+    public PIndexState getIndexState() {
+        return indexState;
+    }
+
+    public int getColumnCounter() {
+        return columnCounter;
+    }
+
+    public PhckTable getParent() {
+        return parent;
+    }
+
+    public PhckTable getPhysicalTable() {
+        return physicalTable;
+    }
+
+    public List<PhckTable> getChildren() {
+        return children;
     }
 
     public int getHeadRowColumnCount() {
@@ -110,5 +146,9 @@ public class PhckTable {
     public boolean isViewTable() {
         return this.tableName != null &&
                 this.tableType != null && this.tableType == PTableType.VIEW;
+    }
+
+    public boolean isColumnCountMatches() {
+        return this.headRowColumnCount == this.columnCounter;
     }
 }

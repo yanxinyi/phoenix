@@ -62,6 +62,9 @@ public class PhoenixIntegrityCheckAndRepairTool extends Configured implements To
         while (viewRS.next()) {
             PhckRow row = new PhckRow(viewRS);
 
+            if (row.isHeadRow()) {
+                PhckTable phckTable = new PhckTable(row)
+            }
         }
     }
 
