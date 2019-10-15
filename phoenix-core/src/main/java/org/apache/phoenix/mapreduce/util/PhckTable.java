@@ -18,6 +18,7 @@
 package org.apache.phoenix.mapreduce.util;
 
 import org.apache.phoenix.schema.PIndexState;
+import org.apache.phoenix.schema.PTable;
 import org.apache.phoenix.schema.PTableType;
 
 import java.util.ArrayList;
@@ -35,9 +36,11 @@ public class PhckTable {
     int headRowColumnCount;
     // Number of columns belongs to a table
     int columnCounter;
+    int numOfQualifierCountRow;
     PhckTable parent;
     PhckTable physicalTable;
     List<PhckTable> children;
+    List<PhckRow> unknownRows;
 
     public PhckTable(String tenantId, String tableSchema, String tableName, String tableType,
                      String headRowColumnCount, String indexState) {
@@ -46,6 +49,7 @@ public class PhckTable {
         this.tableName = tableName;
         this.headRowColumnCount = Integer.valueOf(headRowColumnCount);
         this.columnCounter = 0;
+        this.numOfQualifierCountRow = 0;
 
         if (tableType == null) {
             this.tableType = null;
@@ -108,7 +112,11 @@ public class PhckTable {
     }
 
     public void incrementColumnCount() {
-        columnCounter++;
+        this.columnCounter++;
+    }
+
+    public void incrementQualifierCount() {
+        this.numOfQualifierCountRow++;
     }
 
     public void addParentTable(PhckTable parent) {
@@ -160,5 +168,21 @@ public class PhckTable {
 
     public boolean isColumnCountMatches() {
         return this.headRowColumnCount == this.columnCounter;
+    }
+
+    public boolean isValidQualifierRowCount() {
+        if (this.tableType == PTableType.VIEW && this.numOfQualifierCountRow != 0) {
+            return false;
+        } else if (this.tableType == PTableType.TABLE && this.numOfQualifierCountRow != 1) {
+            return false;
+        } else if (this.tableType == PTableType.INDEX && this.numOfQualifierCountRow != 1) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public void addLinkRow(PhckRow row) {
+        // todo
     }
 }

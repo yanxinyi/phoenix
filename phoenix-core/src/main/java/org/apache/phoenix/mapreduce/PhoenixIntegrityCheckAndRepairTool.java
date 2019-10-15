@@ -59,32 +59,39 @@ public class PhoenixIntegrityCheckAndRepairTool extends Configured implements To
 
     public void fetchAllRows(PhoenixConnection phoenixConnection) throws Exception {
         ResultSet viewRS = phoenixConnection.createStatement().executeQuery(SELECT_QUERY);
+
         while (viewRS.next()) {
             PhckRow row = new PhckRow(viewRS);
-
+            PhckTable phckTable;
             //added row table name to the set.
             String fullName = row.getFullName();
+
             if (row.isHeadRow()) {
-                PhckTable phckTable = new PhckTable(row.getTenantId(), row.getTableSchema(),
+                phckTable = new PhckTable(row.getTenantId(), row.getTableSchema(),
                         row.getTableName(),row.getTableType(),row.getColumnCount(),
                         row.getIndexState());
                 if (phckTable.isSystemTable()) {
                     // SHOULD NOT BE
                 }
                 allTables.put(fullName, phckTable);
-            } else if (row.isQualifierCounterRow()) {
-                // for now, we don't do anything at qualifier counter row
                 continue;
+            }
+
+            if (!allTables.containsKey(fullName)) {
+                // found an orphan row
+                orphanRowSet.add(row);
+            }
+
+            phckTable = allTables.get(fullName);
+            if (row.isQualifierCounterRow()) {
+                // for now, we don't do anything at qualifier counter row
+                phckTable.incrementQualifierCount();
             } else if (row.isColumnRow()) {
                 // update the column count
-                if (allTables.containsKey(fullName)) {
-                    PhckTable phckTable = allTables.get(fullName);
-                    phckTable.incrementColumnCount();
-                }
+                phckTable.incrementColumnCount();
             } else if (row.isLinkRow()) {
                 //update the linking relation
-            } else {
-                // LOGGING ?
+                phckTable.addLinkRow(row);
             }
         }
     }
