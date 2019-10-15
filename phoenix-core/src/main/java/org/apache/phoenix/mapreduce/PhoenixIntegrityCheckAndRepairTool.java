@@ -17,8 +17,6 @@
  */
 package org.apache.phoenix.mapreduce;
 
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Options;
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
@@ -31,8 +29,6 @@ import org.apache.phoenix.mapreduce.util.ConnectionUtil;
 import org.apache.phoenix.mapreduce.util.PhckRow;
 import org.apache.phoenix.mapreduce.util.PhckTable;
 import org.apache.phoenix.mapreduce.util.PhckUtil;
-import org.apache.phoenix.schema.PTable;
-import org.apache.phoenix.schema.PTableType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +41,6 @@ import java.util.Properties;
 
 import static com.sun.javaws.Globals.parseOptions;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.*;
-import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.VIEW_TYPE;
 
 public class PhoenixIntegrityCheckAndRepairTool extends Configured implements Tool {
     private static final Logger LOGGER =
@@ -57,11 +52,11 @@ public class PhoenixIntegrityCheckAndRepairTool extends Configured implements To
     private static final String SELECT_QUERY = PhckUtil.BASE_SELECT_QUERY +
             " WHERE " + TABLE_SCHEM + " NOT LIKE '" + SYSTEM_SCHEMA_NAME + "'";
 
-    public void fetchAllRows(PhoenixConnection phoenixConnection) throws Exception {
+    private void fetchAllRows(PhoenixConnection phoenixConnection) throws Exception {
         ResultSet viewRS = phoenixConnection.createStatement().executeQuery(SELECT_QUERY);
 
         while (viewRS.next()) {
-            PhckRow row = new PhckRow(viewRS);
+            PhckRow row = new PhckRow(viewRS, PhckUtil.PHCK_ROW_RESOURCE.CATALOG);
             PhckTable phckTable;
             //added row table name to the set.
             String fullName = row.getFullName();
@@ -70,9 +65,6 @@ public class PhoenixIntegrityCheckAndRepairTool extends Configured implements To
                 phckTable = new PhckTable(row.getTenantId(), row.getTableSchema(),
                         row.getTableName(),row.getTableType(),row.getColumnCount(),
                         row.getIndexState());
-                if (phckTable.isSystemTable()) {
-                    // SHOULD NOT BE
-                }
                 allTables.put(fullName, phckTable);
                 continue;
             }
@@ -90,14 +82,23 @@ public class PhoenixIntegrityCheckAndRepairTool extends Configured implements To
                 // update the column count
                 phckTable.incrementColumnCount();
             } else if (row.isLinkRow()) {
-                //update the linking relation
-                phckTable.addLinkRow(row);
+                //TODO: figure out do we need link relation here
             }
         }
     }
 
-    public void processNoneSystemLevelCheck(PhoenixConnection phoenixConnection) {
+    private void processValidationCheck() {
 
+    }
+
+    private void buildLinkGraph(PhoenixConnection phoenixConnection) throws Exception {
+        ResultSet viewRS = phoenixConnection.createStatement().executeQuery(SELECT_QUERY);
+    }
+
+    private void processNoneSystemLevelCheck(PhoenixConnection phoenixConnection) throws Exception {
+        fetchAllRows(phoenixConnection);
+        buildLinkGraph(phoenixConnection);
+        processValidationCheck();
     }
 
     @Override

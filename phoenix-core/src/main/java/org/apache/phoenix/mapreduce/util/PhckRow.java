@@ -32,8 +32,11 @@ public class PhckRow {
     private String indexType;
     private String viewType;
     private String qualifierCounter;
+    private PhckUtil.PHCK_STATE phckState;
+    private PhckUtil.PHCK_ROW_RESOURCE phckRowResource;
 
-    public PhckRow(ResultSet resultSet) throws Exception {
+    public PhckRow(ResultSet resultSet, PhckUtil.PHCK_ROW_RESOURCE phckRowResource)
+            throws Exception {
         this.tenantId = resultSet.getString(1);
         this.tableSchema = resultSet.getString(2);
         this.tableName = resultSet.getString(3);
@@ -46,6 +49,8 @@ public class PhckRow {
         this.indexType = resultSet.getString(10);
         this.viewType = resultSet.getString(11);
         this.qualifierCounter = resultSet.getString(12);
+        this.phckState = PhckUtil.PHCK_STATE.VALID;
+        this.phckRowResource = phckRowResource;
     }
 
     public String getFullName() {
@@ -114,5 +119,17 @@ public class PhckRow {
 
     public String getQualifierCounter() {
         return qualifierCounter;
+    }
+
+    public PhckUtil.PHCK_STATE getPhckState() {
+        return this.phckState;
+    }
+
+    public void setPhckState(PhckUtil.PHCK_STATE phckState) {
+        this.phckState = phckState;
+    }
+
+    public PhckUtil.PHCK_ROW_RESOURCE getPhckRowResource() {
+        return phckRowResource;
     }
 }

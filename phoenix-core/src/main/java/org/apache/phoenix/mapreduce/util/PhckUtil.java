@@ -30,6 +30,20 @@ import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.*;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYSTEM_CATALOG_NAME;
 
 public class PhckUtil {
+    public enum PHCK_STATE {
+        ORPHAN_ROW,
+        ORPHAN_VIEW,
+        MISMATCH_COLUMN_COUNT,
+        INVALID_SYSTEM_TABLE_LINK,
+        INVALID_SYSTEM_TABLE,
+        VALID,
+    }
+
+    public enum PHCK_ROW_RESOURCE {
+        CATALOG,
+        CHILD_LINK,
+    }
+
     public static final String BASE_SELECT_QUERY = "SELECT " +
             TENANT_ID + ", " + TABLE_SCHEM + "," + TABLE_NAME + "," + TABLE_TYPE + "," +
             COLUMN_FAMILY + "," + COLUMN_NAME + "," + COLUMN_COUNT + "," + TABLE_TYPE + "," +

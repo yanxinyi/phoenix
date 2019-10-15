@@ -40,7 +40,7 @@ public class PhckTable {
     PhckTable parent;
     PhckTable physicalTable;
     List<PhckTable> children;
-    List<PhckRow> unknownRows;
+    PhckUtil.PHCK_STATE phckState;
 
     public PhckTable(String tenantId, String tableSchema, String tableName, String tableType,
                      String headRowColumnCount, String indexState) {
@@ -50,6 +50,7 @@ public class PhckTable {
         this.headRowColumnCount = Integer.valueOf(headRowColumnCount);
         this.columnCounter = 0;
         this.numOfQualifierCountRow = 0;
+        this.phckState = PhckUtil.PHCK_STATE.VALID;
 
         if (tableType == null) {
             this.tableType = null;
@@ -168,6 +169,14 @@ public class PhckTable {
 
     public boolean isColumnCountMatches() {
         return this.headRowColumnCount == this.columnCounter;
+    }
+
+    public PhckUtil.PHCK_STATE getPhckState() {
+        return this.phckState;
+    }
+
+    public void setPhckState(PhckUtil.PHCK_STATE phckState) {
+        this.phckState = phckState;
     }
 
     public boolean isValidQualifierRowCount() {
