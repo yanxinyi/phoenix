@@ -48,6 +48,10 @@ public class PhckRow {
         this.qualifierCounter = resultSet.getString(12);
     }
 
+    public String getFullName() {
+        return this.tenantId + "," + this.tableSchema + "," + this.tableName;
+    }
+
     public boolean isHeadRow() {
         return this.tableName != null && this.columnCount != null && this.tableType != null;
     }

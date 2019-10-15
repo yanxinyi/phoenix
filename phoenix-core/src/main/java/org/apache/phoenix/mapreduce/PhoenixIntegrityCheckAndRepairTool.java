@@ -62,8 +62,29 @@ public class PhoenixIntegrityCheckAndRepairTool extends Configured implements To
         while (viewRS.next()) {
             PhckRow row = new PhckRow(viewRS);
 
+            //added row table name to the set.
+            String fullName = row.getFullName();
             if (row.isHeadRow()) {
-                PhckTable phckTable = new PhckTable(row)
+                PhckTable phckTable = new PhckTable(row.getTenantId(), row.getTableSchema(),
+                        row.getTableName(),row.getTableType(),row.getColumnCount(),
+                        row.getIndexState());
+                if (phckTable.isSystemTable()) {
+                    // SHOULD NOT BE
+                }
+                allTables.put(fullName, phckTable);
+            } else if (row.isQualifierCounterRow()) {
+                // for now, we don't do anything at qualifier counter row
+                continue;
+            } else if (row.isColumnRow()) {
+                // update the column count
+                if (allTables.containsKey(fullName)) {
+                    PhckTable phckTable = allTables.get(fullName);
+                    phckTable.incrementColumnCount();
+                }
+            } else if (row.isLinkRow()) {
+                //update the linking relation
+            } else {
+                // LOGGING ?
             }
         }
     }

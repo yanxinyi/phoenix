@@ -39,14 +39,24 @@ public class PhckTable {
     PhckTable physicalTable;
     List<PhckTable> children;
 
-    public PhckTable(String tenantId, String tableSchema, String tableName, PTableType tableType,
-                     int headRowColumnCount) {
+    public PhckTable(String tenantId, String tableSchema, String tableName, String tableType,
+                     String headRowColumnCount, String indexState) {
         this.tenantId = tenantId;
         this.tableSchema = tableSchema;
         this.tableName = tableName;
-        this.tableType = tableType;
-        this.headRowColumnCount = headRowColumnCount;
+        this.headRowColumnCount = Integer.valueOf(headRowColumnCount);
         this.columnCounter = 0;
+
+        if (tableType == null) {
+            this.tableType = null;
+        } else {
+            this.tableType = PTableType.fromSerializedValue(tableType);
+        }
+        if (indexState == null) {
+            this.indexState = null;
+        } else {
+            this.indexState = PIndexState.fromSerializedValue(indexState);
+        }
     }
 
     public int getParentTableHeadRowColumnCount() {
