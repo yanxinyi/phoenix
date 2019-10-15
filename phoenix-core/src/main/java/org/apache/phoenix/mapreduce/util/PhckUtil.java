@@ -17,6 +17,8 @@
  */
 package org.apache.phoenix.mapreduce.util;
 
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Options;
 import org.apache.phoenix.schema.PIndexState;
 import org.apache.phoenix.schema.PTableType;
 
@@ -34,137 +36,19 @@ public class PhckUtil {
             INDEX_STATE + "," + INDEX_TYPE + "," + VIEW_TYPE + "," + COLUMN_QUALIFIER_COUNTER +
             " FROM " + SYSTEM_CATALOG_NAME;
 
-    public class Table {
-        String tenantId;
-        String tableSchema;
-        String tableName;
-        PTableType tableType;
-        PIndexState indexState;
-        // COLUMN_COUNT FROM SYSTEM.CATALOG VALUE
-        int headRowColumnCount;
-        // Number of columns belongs to a table
-        int columnCounter;
-        Table parent;
-        Table physicalTable;
-        List<Table> children;
-
-        public Table(String tenantId, String tableSchema, String tableName, PTableType tableType,
-                     int headRowColumnCount) {
-            this.tenantId = tenantId;
-            this.tableSchema = tableSchema;
-            this.tableName = tableName;
-            this.tableType = tableType;
-            this.headRowColumnCount = headRowColumnCount;
-            this.columnCounter = 0;
-        }
-
-        public int getParentTableHeadRowColumnCount() {
-            if (parent == null) {
-                return -1;
-            }
-
-            return parent.getHeadRowColumnCount();
-        }
-
-        public int getHeadRowColumnCount() {
-            return this.headRowColumnCount;
-        }
-
-        public void incrementColumnCount() {
-            columnCounter++;
-        }
-
-        public void addParentTable(Table parent) {
-            this.parent = parent;
-        }
-
-
-        public void addPhysicalTable(Table physicalTable) {
-            this.physicalTable = physicalTable;
-        }
-
-        public void addChildTable(Table child) {
-            if (children == null) {
-                children = new ArrayList<>();
-            }
-
-            children.add(child);
-        }
-
-        public boolean isIndexDisabled() {
-            if (this.indexState == PIndexState.DISABLE ||
-                    this.indexState == PIndexState.INACTIVE ||
-                    this.indexState == PIndexState.UNUSABLE) {
-                return true;
-            }
-            return false;
-        }
-
-        public boolean isSystemTable() {
-            return this.tableSchema != null && this.tableSchema.equals(SYSTEM_SCHEMA_NAME) &&
-                    this.tableName != null &&
-                    this.tableType != null && this.tableType == PTableType.SYSTEM;
-        }
-
-        public boolean isIndexTable() {
-            return this.tableName != null &&
-                    this. tableType != null && this.tableType == PTableType.INDEX;
-        }
-
-        public boolean isPhysicalTable() {
-            return this.tableName != null &&
-                    this.tableType != null && this.tableType == PTableType.TABLE;
-        }
-
-        public boolean isViewTable() {
-            return this.tableName != null &&
-                    this.tableType != null && this.tableType == PTableType.VIEW;
-        }
+    public static Options getOptions() {
+        final Options options = new Options();
+        return options;
     }
 
-    public class Row {
-        String tenantId;
-        String tableSchema;
-        String tableName;
-        String tableType;
-        String columnFamily;
-        String columnName;
-        String columnCount;
-        String linkType;
-        String indexState;
-        String indexType;
-        String viewType;
-        String qualifierCounter;
+    public static void printHelpAndExit(String errorMessage, Options options) {
+        System.err.println(errorMessage);
+        printHelpAndExit(options, 1);
+    }
 
-        Row(ResultSet resultSet) throws Exception {
-            this.tenantId = resultSet.getString(1);
-            this.tableSchema = resultSet.getString(2);
-            this.tableName = resultSet.getString(3);
-            this.tableType = resultSet.getString(4);
-            this.columnFamily = resultSet.getString(5);
-            this.columnName = resultSet.getString(6);
-            this.columnCount = resultSet.getString(7);
-            this.linkType = resultSet.getString(8);
-            this.indexState = resultSet.getString(9);
-            this.indexType = resultSet.getString(10);
-            this.viewType = resultSet.getString(11);
-            this.qualifierCounter = resultSet.getString(12);
-        }
-
-        public boolean isHeadRow() {
-            return this.tableName != null && this.columnCount != null && this.tableType != null;
-        }
-
-        public boolean isColumnRow() {
-            return this.tableName != null && this.columnName != null;
-        }
-
-        public boolean isQualifierCounterRow() {
-            return this.tableName != null && this.qualifierCounter != null;
-        }
-
-        public boolean isLinkRow() {
-            return this.linkType != null && this.columnFamily != null;
-        }
+    public static void printHelpAndExit(Options options, int exitCode) {
+        HelpFormatter formatter = new HelpFormatter();
+        formatter.printHelp("help", options);
+        System.exit(exitCode);
     }
 }
