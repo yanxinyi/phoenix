@@ -39,18 +39,18 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Properties;
 
-import static com.sun.javaws.Globals.parseOptions;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.*;
 
-public class PhoenixIntegrityCheckAndRepairTool extends Configured implements Tool {
+public class PhckNonSystemTableValidator extends Configured implements Tool {
     private static final Logger LOGGER =
-            LoggerFactory.getLogger(PhoenixIntegrityCheckAndRepairTool.class);
+            LoggerFactory.getLogger(PhckNonSystemTableValidator.class);
 
     private HashSet<PhckRow> orphanRowSet = new HashSet<>();
     private HashMap<String, PhckTable> allTables = new HashMap<>();
 
     private static final String SELECT_QUERY = PhckUtil.BASE_SELECT_QUERY +
             " WHERE " + TABLE_SCHEM + " NOT LIKE '" + SYSTEM_SCHEMA_NAME + "'";
+
 
     private void fetchAllRows(PhoenixConnection phoenixConnection) throws Exception {
         ResultSet viewRS = phoenixConnection.createStatement().executeQuery(SELECT_QUERY);
@@ -92,7 +92,7 @@ public class PhoenixIntegrityCheckAndRepairTool extends Configured implements To
     }
 
     private void buildLinkGraph(PhoenixConnection phoenixConnection) throws Exception {
-        ResultSet viewRS = phoenixConnection.createStatement().executeQuery(SELECT_QUERY);
+        ResultSet viewRS = phoenixConnection.createStatement().executeQuery(PhckUtil.SELECT_CHILD_LINK_QUERY);
     }
 
     private void processNoneSystemLevelCheck(PhoenixConnection phoenixConnection) throws Exception {
@@ -129,7 +129,9 @@ public class PhoenixIntegrityCheckAndRepairTool extends Configured implements To
         return 0;
     }
 
+    public void parseOptions(String[] args) {
 
+    }
 
     private void closeConnection(Connection connection) {
         try {
@@ -143,7 +145,7 @@ public class PhoenixIntegrityCheckAndRepairTool extends Configured implements To
     }
 
     public static void main(final String[] args) throws Exception {
-        int result = ToolRunner.run(new PhoenixIntegrityCheckAndRepairTool(), args);
+        int result = ToolRunner.run(new PhckNonSystemTableValidator(), args);
         System.exit(result);
     }
 }

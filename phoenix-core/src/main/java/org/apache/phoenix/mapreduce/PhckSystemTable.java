@@ -34,7 +34,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Properties;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import static com.sun.javaws.Globals.parseOptions;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYSTEM_SCHEMA_NAME;
@@ -113,7 +112,7 @@ public class PhckSystemTable {
     }
 
     public static void main(final String[] args) throws Exception {
-        int result = ToolRunner.run(new PhoenixIntegrityCheckAndRepairTool(), args);
+        int result = ToolRunner.run(new PhckNonSystemTableValidator(), args);
         System.exit(result);
     }
 

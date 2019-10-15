@@ -45,10 +45,15 @@ public class PhckUtil {
     }
 
     public static final String BASE_SELECT_QUERY = "SELECT " +
-            TENANT_ID + ", " + TABLE_SCHEM + "," + TABLE_NAME + "," + TABLE_TYPE + "," +
-            COLUMN_FAMILY + "," + COLUMN_NAME + "," + COLUMN_COUNT + "," + TABLE_TYPE + "," +
+            TENANT_ID + ", " + TABLE_SCHEM + "," + TABLE_NAME + "," + COLUMN_NAME + "," +
+            COLUMN_FAMILY + "," + LINK_TYPE + "," + COLUMN_COUNT + "," + TABLE_TYPE + "," +
             INDEX_STATE + "," + INDEX_TYPE + "," + VIEW_TYPE + "," + COLUMN_QUALIFIER_COUNTER +
             " FROM " + SYSTEM_CATALOG_NAME;
+
+    public static final String SELECT_CHILD_LINK_QUERY = "SELECT " +
+            TENANT_ID + ", " + TABLE_SCHEM + "," + TABLE_NAME + "," + COLUMN_NAME + "," +
+            COLUMN_FAMILY + "," + LINK_TYPE +
+            " FROM " + SYSTEM_CHILD_LINK_NAME;
 
     public static Options getOptions() {
         final Options options = new Options();

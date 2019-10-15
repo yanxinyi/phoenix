@@ -37,20 +37,30 @@ public class PhckRow {
 
     public PhckRow(ResultSet resultSet, PhckUtil.PHCK_ROW_RESOURCE phckRowResource)
             throws Exception {
+        this.phckRowResource = phckRowResource;
         this.tenantId = resultSet.getString(1);
         this.tableSchema = resultSet.getString(2);
         this.tableName = resultSet.getString(3);
-        this.tableType = resultSet.getString(4);
+        this.columnName = resultSet.getString(4);
         this.columnFamily = resultSet.getString(5);
-        this.columnName = resultSet.getString(6);
-        this.columnCount = resultSet.getString(7);
-        this.linkType = resultSet.getString(8);
-        this.indexState = resultSet.getString(9);
-        this.indexType = resultSet.getString(10);
-        this.viewType = resultSet.getString(11);
-        this.qualifierCounter = resultSet.getString(12);
-        this.phckState = PhckUtil.PHCK_STATE.VALID;
-        this.phckRowResource = phckRowResource;
+        this.linkType = resultSet.getString(6);
+
+        /*
+    TENANT_ID | TABLE_SCHEM | TABLE_NAME | COLUMN_NAME | COLUMN_FAMILY | LINK_TYPE
+     */
+
+        if (this.phckRowResource == PhckUtil.PHCK_ROW_RESOURCE.CATALOG) {
+            this.columnCount = resultSet.getString(7);
+            this.tableType = resultSet.getString(8);
+            this.indexState = resultSet.getString(9);
+            this.indexType = resultSet.getString(10);
+            this.viewType = resultSet.getString(11);
+            this.qualifierCounter = resultSet.getString(12);
+            this.phckState = PhckUtil.PHCK_STATE.VALID;
+        } else {
+
+        }
+
     }
 
     public String getFullName() {
