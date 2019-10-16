@@ -36,13 +36,12 @@ import java.util.HashSet;
 import java.util.Properties;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
-import static com.sun.javaws.Globals.parseOptions;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYSTEM_SCHEMA_NAME;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.TABLE_SCHEM;
 
-public class PhckSystemTable extends Configured implements Tool {
+public class PhckSystemTableValidator extends Configured implements Tool {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PhckSystemTable.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(PhckSystemTableValidator.class);
     private HashSet<PhckRow> orphanRowSet = new HashSet<>();
     private HashSet<PhckRow> invalidSystemTableName = new HashSet<>();
     private HashSet<PhckTable> invalidSystemTableCount = new HashSet<>();
@@ -56,7 +55,7 @@ public class PhckSystemTable extends Configured implements Tool {
     public void fetchAllRows(PhoenixConnection phoenixConnection) throws Exception {
         ResultSet viewRS = phoenixConnection.createStatement().executeQuery(SELECT_QUERY);
         while (viewRS.next()) {
-            PhckRow row = new PhckRow(viewRS);
+            PhckRow row = new PhckRow(viewRS, PhckUtil.PHCK_ROW_RESOURCE.CATALOG);
             PhckTable phckTable;
             String tableName = row.getFullName();
             if (row.isHeadRow()) {
@@ -93,7 +92,13 @@ public class PhckSystemTable extends Configured implements Tool {
             }
         }
         if(!invalidSystemTableCount.isEmpty()) {
-
+            throw new AssertionError("Invalid Row count detected!!!");
+        }
+        if(!invalidSystemTableLink.isEmpty()) {
+            throw new AssertionError("Invalid System table links detected!!!");
+        }
+        if(!invalidSystemTableName.isEmpty()) {
+            throw new AssertionError("Invalid tables with System schema detected!!!");
         }
     }
 
@@ -125,7 +130,9 @@ public class PhckSystemTable extends Configured implements Tool {
         return 0;
     }
 
+    public void parseOptions (String[] args) {
 
+    }
 
     private void closeConnection(Connection connection) {
         try {
