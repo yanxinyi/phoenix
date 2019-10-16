@@ -22,6 +22,7 @@ import org.apache.phoenix.schema.PTable;
 import java.sql.ResultSet;
 
 public class PhckRow {
+    private final String EMPTY_COLUMN_VALUE = " ";
     private String tenantId;
     private String tableSchema;
     private String tableName;
@@ -58,11 +59,15 @@ public class PhckRow {
         } else {
 
         }
-
     }
 
     public String getFullName() {
-        return this.tenantId + "," + this.tableSchema + "," + this.tableName;
+        return this.tenantId + "," + this.tableSchema + "." + this.tableName;
+    }
+
+    public boolean isSchemaRow() {
+        return (this.tableName == null || this.tableName.equals(EMPTY_COLUMN_VALUE))
+                && this.tenantId == null && this.tableSchema != null;
     }
 
     public boolean isHeadRow() {
@@ -110,10 +115,10 @@ public class PhckRow {
     }
 
     public PTable.LinkType getLinkType() {
-        if (tableType == null) {
+        if (linkType == null) {
             return null;
         }
-        return PTable.LinkType.fromSerializedValue(Byte.valueOf(tableType));
+        return PTable.LinkType.fromSerializedValue(Byte.valueOf(linkType));
     }
 
     public String getIndexState() {

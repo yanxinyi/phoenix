@@ -62,6 +62,9 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
             //added row table name to the set.
             String fullName = row.getFullName();
 
+            if (row.isSchemaRow()) {
+                continue;
+            }
             if (row.isHeadRow()) {
                 phckTable = new PhckTable(row.getTenantId(), row.getTableSchema(),
                         row.getTableName(),row.getTableType(),row.getColumnCount(),
@@ -85,6 +88,7 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
                 phckTable.incrementColumnCount();
             } else if (row.isLinkRow()) {
                 //TODO: figure out do we need link relation here
+                phckTable.addLinkRow(row);
             }
         }
     }
@@ -95,8 +99,36 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
 
         //build graph tree from the base table
         for (PhckTable phckTable : allTables.values()) {
-            if (phckTable.isPhysicalTable()) {
+            if (phckTable.isPhysicalTable() || phckTable.isIndexTable()) {
                 queue.add(phckTable);
+            }
+
+            if (phckTable.hasPendingRelationRowToProcess()) {
+                for (PhckRow phckRow : phckTable.getRelationRows()) {
+                    String relationTableName = phckRow.getTenantId() + "," + phckRow.getColumnName();
+
+                    if (phckRow.getLinkType() == PTable.LinkType.INDEX_TABLE) {
+                        // Link from a table to its index table
+                        if (allTables.containsKey(relationTableName)) {
+                            phckTable.addChildTable(allTables.get(relationTableName));
+                        } else {
+                            phckRow.setPhckState(PhckUtil.PHCK_STATE.INVALID_SYSTEM_TABLE_LINK);
+                            invalidRowSet.add(phckRow);
+                        }
+                    } else if (phckRow.getLinkType() == PTable.LinkType.PARENT_TABLE) {
+                        // Link from a view to its parent table
+                        if (allTables.containsKey(relationTableName)) {
+                            allTables.get(relationTableName).addChildTable(phckTable);
+                        } else {
+                            // if parent doesn't exist, it means linking is bad and current view
+                            // has problem too.
+                            phckTable.setPhckState(PhckUtil.PHCK_STATE.INVALID_SYSTEM_TABLE_LINK);
+                            invalidTableSet.add(phckTable);
+                            phckRow.setPhckState(PhckUtil.PHCK_STATE.INVALID_SYSTEM_TABLE_LINK);
+                            invalidRowSet.add(phckRow);
+                        }
+                    }
+                }
             }
         }
 
@@ -105,15 +137,19 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
             orphanViewsName.remove(phckTable.getFullName());
 
             if (phckTable.isColumnCountMatches()) {
-                queue.addAll(phckTable.getChildren());
+                if (phckTable.getChildren() != null) {
+                    queue.addAll(phckTable.getChildren());
+                }
             } else {
                 phckTable.setPhckState(PhckUtil.PHCK_STATE.MISMATCH_COLUMN_COUNT);
                 invalidTableSet.add(phckTable);
                 // if base table is corrupted, all child view/index are corrupted too.
-                for (PhckTable childTable : phckTable.getChildren()) {
-                    childTable.setPhckState(PhckUtil.PHCK_STATE.MISMATCH_COLUMN_COUNT);
-                    invalidTableSet.add(childTable);
-                    orphanViewsName.remove(childTable.getFullName());
+                if (phckTable.getChildren() != null) {
+                    for (PhckTable childTable : phckTable.getChildren()) {
+                        childTable.setPhckState(PhckUtil.PHCK_STATE.MISMATCH_COLUMN_COUNT);
+                        invalidTableSet.add(childTable);
+                        orphanViewsName.remove(childTable.getFullName());
+                    }
                 }
             }
         }
@@ -146,7 +182,7 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
                  * +-----------+-------------+------------+-------------+---------------+-----------+
                  */
                 String parent = row.getFullName();
-                String child = row.getColumnFamily();
+                String child = row.getTenantId() + "," + row.getColumnFamily();
                 //TODO: how to construct parentTableName, as well as childTableName
                 if (!allTables.containsKey(parent) || !allTables.containsKey(child)) {
                     // TODO INVALID ROW
@@ -169,6 +205,14 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
         fetchAllRows(phoenixConnection);
         buildLinkGraph(phoenixConnection);
         processValidationCheck();
+    }
+
+    public Set<PhckRow> getInvalidRowSet() {
+        return this.invalidRowSet;
+    }
+
+    public Set<PhckTable> getInvalidTableSet() {
+        return this.invalidTableSet;
     }
 
     @Override
@@ -196,7 +240,7 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
             closeConnection(connection);
         }
 
-        return 0;
+        return this.invalidRowSet.size() + this.invalidTableSet.size();
     }
 
     public void parseOptions(String[] args) {

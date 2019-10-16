@@ -74,7 +74,9 @@ public class PhckTable {
     PhckTable parent;
     PhckTable physicalTable;
     List<PhckTable> children;
+    private List<PhckRow> relationRows;
     PhckUtil.PHCK_STATE phckState;
+
 
     public PhckTable(String tenantId, String tableSchema, String tableName, String tableType,
                      String headRowColumnCount, String indexState) {
@@ -99,7 +101,7 @@ public class PhckTable {
     }
 
     public String getFullName() {
-        return this.tenantId + "," + this.tableSchema + "," + this.tableName;
+        return this.tenantId + "," + this.tableSchema + "." + this.tableName;
     }
 
     public int getParentTableHeadRowColumnCount() {
@@ -234,7 +236,17 @@ public class PhckTable {
         return true;
     }
 
+    public boolean hasPendingRelationRowToProcess() {
+        return this.relationRows != null;
+    }
+    public List<PhckRow> getRelationRows() {
+        return this.relationRows;
+    }
+
     public void addLinkRow(PhckRow row) {
-        // todo
+        if (this.relationRows == null) {
+            this.relationRows = new ArrayList<>();
+        }
+        this.relationRows.add(row);
     }
 }
