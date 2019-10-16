@@ -36,6 +36,7 @@ public class PhckUtil {
         MISMATCH_COLUMN_COUNT,
         INVALID_SYSTEM_TABLE_LINK,
         INVALID_SYSTEM_TABLE,
+        INVALID_CHILD_LINK_ROW,
         VALID,
     }
 

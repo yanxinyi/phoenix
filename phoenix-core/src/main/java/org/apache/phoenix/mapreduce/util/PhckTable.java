@@ -26,7 +26,41 @@ import java.util.List;
 
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYSTEM_SCHEMA_NAME;
 
+/**
+ *
+ * +-----------+-------------+--------------+------------+---------------+-------------+--------------+-----------+-------------+------------+-----------+-------------------+
+ * | TENANT_ID | TABLE_SCHEM |  TABLE_NAME  | TABLE_TYPE | COLUMN_FAMILY | COLUMN_NAME | COLUMN_COUNT | LINK_TYPE | INDEX_STATE | INDEX_TYPE | VIEW_TYPE | QUALIFIER_COUNTER |
+ * +-----------+-------------+--------------+------------+---------------+-------------+--------------+-----------+-------------+------------+-----------+-------------------+
+ * |           |             | AAA          | u          |               |             | 3            | null      |             | null       | null      | null              |
+ * |           |             | AAA          |            | 0             |             | null         | null      |             | null       | null      | 14                |
+ * |           |             | AAA          | i          | AAA_INDEX     |             | null         | 1         |             | null       | null      | null              |
+ * |           |             | AAA          |            |               | A           | null         | null      |             | null       | null      | null              |
+ * |           |             | AAA          |            | 0             | B           | null         | null      |             | null       | null      | null              |
+ * |           |             | AAA          |            | 0             | C           | null         | null      |             | null       | null      | null              |
+ * |           |             | AAA_INDEX    | i          |               |             | 3            | null      | a           | 1          | null      | null              |
+ * |           |             | AAA_INDEX    |            | 0             |             | null         | null      |             | null       | null      | 13                |
+ * |           |             | AAA_INDEX    |            |               | 0:B         | null         | null      |             | null       | null      | null              |
+ * |           |             | AAA_INDEX    |            | 0             | 0:C         | null         | null      |             | null       | null      | null              |
+ * |           |             | AAA_INDEX    |            |               | :A          | null         | null      |             | null       | null      | null              |
+ * |           |             | AAA_INDEX_V1 | v          |               |             | 4            | null      |             | null       | 3         | null              |
+ * |           |             | AAA_INDEX_V1 |            | AAA_INDEX     |             | null         | 2         |             | null       | null      | null              |
+ * |           |             | AAA_INDEX_V1 |            | 0             | E           | null         | null      |             | null       | null      | null              |
+ * |           |             | AAA_INDEX_V2 | v          |               |             | 3            | null      |             | null       | 3         | null              |
+ * |           |             | AAA_INDEX_V2 |            | AAA_INDEX     |             | null         | 2         |             | null       | null      | null              |
+ * |           |             | AAA_V1       | v          |               |             | 3            | null      |             | null       | 3         | null              |
+ * |           |             | AAA_V1       |            | AAA           |             | null         | 2         |             | null       | null      | null              |
+ * |           |             | AAA_V2       | v          |               |             | 4            | null      |             | null       | 2         | null              |
+ * |           |             | AAA_V2       |            | AAA           |             | null         | 2         |             | null       | null      | null              |
+ * |           |             | AAA_V2       |            | AAA_V1        |             | null         | 3         |             | null       | null      | null              |
+ * |           |             | AAA_V2       |            | 0             | D           | null         | null      |             | null       | null      | null              |
+ * |           |             | FOO          | u          |               |             | 2            | null      |             | null       | null      | null              |
+ * |           |             | FOO          |            | 0             |             | null         | null      |             | null       | null      | 12                |
+ * |           |             | FOO          |            |               | A           | null         | null      |             | null       | null      | null              |
+ * |           |             | FOO          |            | 0             | B           | null         | null      |             | null       | null      | null              |
+ * +-----------+-------------+--------------+------------+---------------+-------------+--------------+-----------+-------------+------------+-----------+-------------------+
+ */
 public class PhckTable {
+    private final int INVALID_PARENT_COLUMN_COUNT = -1;
     String tenantId;
     String tableSchema;
     String tableName;
@@ -64,9 +98,13 @@ public class PhckTable {
         }
     }
 
+    public String getFullName() {
+        return this.tenantId + "," + this.tableSchema + "," + this.tableName;
+    }
+
     public int getParentTableHeadRowColumnCount() {
         if (parent == null) {
-            return -1;
+            return INVALID_PARENT_COLUMN_COUNT;
         }
 
         return parent.getHeadRowColumnCount();
@@ -168,6 +206,11 @@ public class PhckTable {
     }
 
     public boolean isColumnCountMatches() {
+        if (isViewTable()) {
+            return this.getParentTableHeadRowColumnCount() != INVALID_PARENT_COLUMN_COUNT &&
+                    this.headRowColumnCount ==
+                            this.columnCounter + this.getParentTableHeadRowColumnCount();
+        }
         return this.headRowColumnCount == this.columnCounter;
     }
 

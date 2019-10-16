@@ -17,6 +17,8 @@
  */
 package org.apache.phoenix.mapreduce.util;
 
+import org.apache.phoenix.schema.PTable;
+
 import java.sql.ResultSet;
 
 public class PhckRow {
@@ -44,10 +46,6 @@ public class PhckRow {
         this.columnName = resultSet.getString(4);
         this.columnFamily = resultSet.getString(5);
         this.linkType = resultSet.getString(6);
-
-        /*
-    TENANT_ID | TABLE_SCHEM | TABLE_NAME | COLUMN_NAME | COLUMN_FAMILY | LINK_TYPE
-     */
 
         if (this.phckRowResource == PhckUtil.PHCK_ROW_RESOURCE.CATALOG) {
             this.columnCount = resultSet.getString(7);
@@ -111,8 +109,11 @@ public class PhckRow {
         return columnCount;
     }
 
-    public String getLinkType() {
-        return linkType;
+    public PTable.LinkType getLinkType() {
+        if (tableType == null) {
+            return null;
+        }
+        return PTable.LinkType.fromSerializedValue(Byte.valueOf(tableType));
     }
 
     public String getIndexState() {
