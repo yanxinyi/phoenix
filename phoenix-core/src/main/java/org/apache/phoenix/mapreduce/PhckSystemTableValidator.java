@@ -19,6 +19,7 @@
 package org.apache.phoenix.mapreduce;
 
 import org.apache.commons.lang.exception.ExceptionUtils;
+import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.phoenix.jdbc.PhoenixConnection;
