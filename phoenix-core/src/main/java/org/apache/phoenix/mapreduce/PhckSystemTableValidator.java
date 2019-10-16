@@ -19,6 +19,7 @@
 package org.apache.phoenix.mapreduce;
 
 import org.apache.commons.lang.exception.ExceptionUtils;
+import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.phoenix.jdbc.PhoenixConnection;
 import org.apache.phoenix.mapreduce.util.ConnectionUtil;
@@ -35,17 +36,18 @@ import java.util.HashSet;
 import java.util.Properties;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
-import static com.sun.javaws.Globals.parseOptions;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYSTEM_SCHEMA_NAME;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.TABLE_SCHEM;
 
-public class PhckSystemTable {
+public class PhckSystemTableValidator extends Configured implements Tool {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PhckSystemTable.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(PhckSystemTableValidator.class);
     private HashSet<PhckRow> orphanRowSet = new HashSet<>();
     private HashSet<PhckRow> invalidSystemTableName = new HashSet<>();
-    private HashSet<PhckRow> invalidSystemTableCount = new HashSet<>();
+    private HashSet<PhckTable> invalidSystemTableCount = new HashSet<>();
+    private HashSet<PhckRow> invalidSystemTableLink = new HashSet<>();
     private HashMap<String, PhckTable> allTables = new HashMap<>();
+    private HashSet<PhckTable> validRows = new HashSet<>();
 
     private static final String SELECT_QUERY = PhckUtil.BASE_SELECT_QUERY
             + " WHERE " + TABLE_SCHEM + " = '" + SYSTEM_SCHEMA_NAME + "'";
@@ -53,21 +55,51 @@ public class PhckSystemTable {
     public void fetchAllRows(PhoenixConnection phoenixConnection) throws Exception {
         ResultSet viewRS = phoenixConnection.createStatement().executeQuery(SELECT_QUERY);
         while (viewRS.next()) {
-            PhckRow row = new PhckRow(viewRS);
+            PhckRow row = new PhckRow(viewRS, PhckUtil.PHCK_ROW_RESOURCE.CATALOG);
             PhckTable phckTable;
             String tableName = row.getFullName();
             if (row.isHeadRow()) {
-                phckTable = new PhckTable();
-                allTables.put(tableName,phckTable);
+                phckTable = new PhckTable(row.getTenantId(), row.getTableSchema(),
+                        row.getTableName(),row.getTableType(),row.getColumnCount(),
+                        row.getIndexState());
                 if (!phckTable.isSystemTable()) {
                     invalidSystemTableName.add(row);
+                } else {
+                    allTables.put(tableName,phckTable);
                 }
-            } else if (row.)
+            } else if (row.isLinkRow()) {
+                invalidSystemTableLink.add(row);
+            } else if (row.isColumnRow()){
+                if (allTables.containsKey(tableName)) {
+                    allTables.get(tableName).incrementColumnCount();
+                } else {
+                    orphanRowSet.add(row);
+                }
+            } else {
+                LOGGER.warn("Unknown row type : "+row.toString());
+            }
         }
     }
 
-    public void processSystemLevelCheck(PhoenixConnection phoenixConnection) {
-
+    public void processSystemLevelCheck(PhoenixConnection phoenixConnection) throws Exception {
+        fetchAllRows(phoenixConnection);
+        for (PhckTable table : allTables.values()) {
+            if (!table.isColumnCountMatches()) {
+                invalidSystemTableCount.add(table);
+            }
+            else {
+                validRows.add(table);
+            }
+        }
+        if(!invalidSystemTableCount.isEmpty()) {
+            throw new AssertionError("Invalid Row count detected!!!");
+        }
+        if(!invalidSystemTableLink.isEmpty()) {
+            throw new AssertionError("Invalid System table links detected!!!");
+        }
+        if(!invalidSystemTableName.isEmpty()) {
+            throw new AssertionError("Invalid tables with System schema detected!!!");
+        }
     }
 
     @Override
@@ -98,7 +130,9 @@ public class PhckSystemTable {
         return 0;
     }
 
+    public void parseOptions (String[] args) {
 
+    }
 
     private void closeConnection(Connection connection) {
         try {
