@@ -22,6 +22,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 
+import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.phoenix.jdbc.PhoenixConnection;
@@ -30,13 +31,16 @@ import org.apache.phoenix.mapreduce.util.PhckRow;
 import org.apache.phoenix.mapreduce.util.PhckTable;
 import org.apache.phoenix.mapreduce.util.PhckUtil;
 import org.apache.phoenix.schema.PTable;
+import org.apache.phoenix.schema.PTableType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.swing.text.html.HTMLDocument;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.*;
 
@@ -47,25 +51,23 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
     private HashSet<PhckRow> invalidRowSet = new HashSet<>();
     private HashSet<PhckTable> invalidTableSet = new HashSet<>();
 
-    private HashMap<String, PhckTable> allTables = new HashMap<>();
+    private ConcurrentHashMap<String, PhckTable> allTables = new ConcurrentHashMap<>();
 
-    private static final String SELECT_QUERY = PhckUtil.BASE_SELECT_QUERY +
-            " WHERE " + TABLE_SCHEM + " NOT LIKE '" + SYSTEM_SCHEMA_NAME + "'";
+//    private static final String SELECT_QUERY = PhckUtil.BASE_SELECT_QUERY +
+//            " WHERE " + TABLE_SCHEM + " NOT LIKE '" + SYSTEM_SCHEMA_NAME + "'";
 
 
     private void fetchAllRows(PhoenixConnection phoenixConnection) throws Exception {
-        ResultSet viewRS = phoenixConnection.createStatement().executeQuery(SELECT_QUERY);
+        ResultSet viewRS = phoenixConnection.createStatement().executeQuery(PhckUtil.BASE_SELECT_QUERY);
 
         while (viewRS.next()) {
             PhckRow row = new PhckRow(viewRS, PhckUtil.PHCK_ROW_RESOURCE.CATALOG);
             PhckTable phckTable;
             //added row table name to the set.
             String fullName = row.getFullName();
-
             if (row.isSchemaRow()) {
                 continue;
-            }
-            if (row.isHeadRow()) {
+            } else if (row.isHeadRow()) {
                 phckTable = new PhckTable(row.getTenantId(), row.getTableSchema(),
                         row.getTableName(),row.getTableType(),row.getColumnCount(),
                         row.getIndexState());
@@ -77,6 +79,8 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
                 // found an orphan row
                 row.setPhckState(PhckUtil.PHCK_STATE.ORPHAN_ROW);
                 invalidRowSet.add(row);
+                LOGGER.info("Row**** :" + row.getSerializedValue());
+                continue;
             }
 
             phckTable = allTables.get(fullName);
@@ -87,78 +91,137 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
                 // update the column count
                 phckTable.incrementColumnCount();
             } else if (row.isLinkRow()) {
-                //TODO: figure out do we need link relation here
                 phckTable.addLinkRow(row);
             }
         }
     }
 
-    private void processValidationCheck() {
+    private void processValidationCheck(PhoenixConnection phoenixConnection) throws Exception {
         Set<String> orphanViewsName = allTables.keySet();
-        Queue<PhckTable> queue = new LinkedList<>();
+        Queue<PhckTable> processQueue = new LinkedList<>();
+        Queue<PhckTable> invalidTableQueue = new LinkedList<>();
+        Admin admin = phoenixConnection.getQueryServices().getAdmin();
 
         //build graph tree from the base table
-        for (PhckTable phckTable : allTables.values()) {
+        Iterator<PhckTable> it = allTables.values().iterator();
+        while (it.hasNext()) {
+            PhckTable phckTable = it.next();
+            if (phckTable.isSystemTable()) {
+                orphanViewsName.remove(phckTable.getFullName());
+                continue;
+            }
             if (phckTable.isPhysicalTable() || phckTable.isIndexTable()) {
-                queue.add(phckTable);
+                processQueue.add(phckTable);
             }
 
             if (phckTable.hasPendingRelationRowToProcess()) {
                 for (PhckRow phckRow : phckTable.getRelationRows()) {
-                    String relationTableName = phckRow.getTenantId() + "," + phckRow.getColumnName();
-
                     if (phckRow.getLinkType() == PTable.LinkType.INDEX_TABLE) {
+                        String relationTableName = phckRow.getRelatedTableFullName();
                         // Link from a table to its index table
                         if (allTables.containsKey(relationTableName)) {
-                            phckTable.addChildTable(allTables.get(relationTableName));
+                            phckTable.setPhysicalTable(allTables.get(relationTableName));
                         } else {
                             phckRow.setPhckState(PhckUtil.PHCK_STATE.INVALID_SYSTEM_TABLE_LINK);
                             invalidRowSet.add(phckRow);
+                            LOGGER.info("Row**** :" + phckRow.getSerializedValue());
                         }
                     } else if (phckRow.getLinkType() == PTable.LinkType.PARENT_TABLE) {
                         // Link from a view to its parent table
+                        String relationTableName = phckRow.getRelatedTableFullName();
                         if (allTables.containsKey(relationTableName)) {
-                            allTables.get(relationTableName).addChildTable(phckTable);
+                            PhckTable childPhckTable = allTables.get(relationTableName);
+//                            phckTable.setParent(childPhckTable);
+                            childPhckTable.addChildTable(phckTable);
                         } else {
                             // if parent doesn't exist, it means linking is bad and current view
                             // has problem too.
                             phckTable.setPhckState(PhckUtil.PHCK_STATE.INVALID_SYSTEM_TABLE_LINK);
-                            invalidTableSet.add(phckTable);
+                            invalidTableQueue.add(phckTable);
                             phckRow.setPhckState(PhckUtil.PHCK_STATE.INVALID_SYSTEM_TABLE_LINK);
                             invalidRowSet.add(phckRow);
+                            LOGGER.info("Row **** :" + phckRow.getSerializedValue());
+
+                        }
+                    } else if (phckRow.getLinkType() == PTable.LinkType.VIEW_INDEX_PARENT_TABLE) {
+                        String relationTableName = phckRow.getRelatedTableFullName();
+                        if (allTables.containsKey(relationTableName)) {
+                            PhckTable parentViewPhckTable = allTables.get(relationTableName);
+                            phckTable.setParent(parentViewPhckTable);
+                        } else {
+                            phckTable.setPhckState(PhckUtil.PHCK_STATE.INVALID_SYSTEM_TABLE_LINK);
+                            invalidTableQueue.add(phckTable);
+                            invalidRowSet.add(phckRow);
+                            LOGGER.info("Row **** :" + phckRow.getSerializedValue());
+                        }
+                    } else if (phckRow.getLinkType() == PTable.LinkType.PHYSICAL_TABLE) {
+                        String relationTableName = phckRow.getRelatedTableFullName();
+                        if (allTables.containsKey(relationTableName)) {
+                            PhckTable physicalPhckTable = allTables.get(relationTableName);
+                            phckTable.setPhysicalTable(physicalPhckTable);
+                        } else {
+                            if (phckTable.getTableType() == PTableType.INDEX) {
+                                phckTable.setIndexPhysicalName(relationTableName);
+                            } else {
+                                phckTable.setPhckState(PhckUtil.PHCK_STATE.INVALID_CHILD_LINK_ROW);
+                                invalidTableQueue.add(phckTable);
+                                invalidRowSet.add(phckRow);
+                                LOGGER.info("Row **** :" + phckRow.getSerializedValue());
+                            }
                         }
                     }
                 }
             }
         }
 
-        while (!queue.isEmpty()) {
-            PhckTable phckTable = queue.poll();
+        while (!processQueue.isEmpty()) {
+            PhckTable phckTable = processQueue.poll();
+
+            if (phckTable.isPhysicalTable()  && !admin.tableExists(phckTable.getHBaseTableName())) {
+                phckTable.setPhckState(PhckUtil.PHCK_STATE.INVALID_TABLE);
+                invalidTableQueue.add(phckTable);
+            } else if (phckTable.isIndexTable()) {
+                if (!admin.tableExists(phckTable.getHBaseTableName()) &&
+                        !admin.tableExists(phckTable.getIndexPhysicalName())) {
+                    invalidTableQueue.add(phckTable);
+                }
+            }
+
             orphanViewsName.remove(phckTable.getFullName());
 
             if (phckTable.isColumnCountMatches()) {
                 if (phckTable.getChildren() != null) {
-                    queue.addAll(phckTable.getChildren());
+                    processQueue.addAll(phckTable.getChildren());
                 }
             } else {
                 phckTable.setPhckState(PhckUtil.PHCK_STATE.MISMATCH_COLUMN_COUNT);
-                invalidTableSet.add(phckTable);
-                // if base table is corrupted, all child view/index are corrupted too.
-                if (phckTable.getChildren() != null) {
-                    for (PhckTable childTable : phckTable.getChildren()) {
-                        childTable.setPhckState(PhckUtil.PHCK_STATE.MISMATCH_COLUMN_COUNT);
-                        invalidTableSet.add(childTable);
-                        orphanViewsName.remove(childTable.getFullName());
-                    }
-                }
+                invalidTableQueue.add(phckTable);
             }
         }
 
         for (String orphanViewName : orphanViewsName) {
             PhckTable orphanView = allTables.get(orphanViewName);
             orphanView.setPhckState(PhckUtil.PHCK_STATE.ORPHAN_VIEW);
-            invalidTableSet.add(orphanView);
+            invalidTableQueue.add(orphanView);
         }
+
+        while (!invalidTableQueue.isEmpty()) {
+            PhckTable phckTable = invalidTableQueue.poll();
+            if (phckTable.getPhckState() == PhckUtil.PHCK_STATE.VALID) {
+                phckTable.setPhckState(phckTable.getParent().getPhckState());
+            }
+            invalidTableSet.add(phckTable);
+            LOGGER.info("Table **** :" + phckTable.getSerializedValue());
+            if (phckTable.getChildren() != null) {
+                for (PhckTable childTable : phckTable.getChildren()) {
+                    childTable.setPhckState(phckTable.getPhckState());
+                    invalidTableQueue.add(childTable);
+                }
+            }
+
+        }
+
+
     }
 
     private void buildLinkGraph(PhoenixConnection phoenixConnection) throws Exception {
@@ -182,7 +245,7 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
                  * +-----------+-------------+------------+-------------+---------------+-----------+
                  */
                 String parent = row.getFullName();
-                String child = row.getTenantId() + "," + row.getColumnFamily();
+                String child = row.getRelatedTableFullName();
                 //TODO: how to construct parentTableName, as well as childTableName
                 if (!allTables.containsKey(parent) || !allTables.containsKey(child)) {
                     // TODO INVALID ROW
@@ -204,7 +267,7 @@ public class PhckNonSystemTableValidator extends Configured implements Tool {
     private void processNoneSystemLevelCheck(PhoenixConnection phoenixConnection) throws Exception {
         fetchAllRows(phoenixConnection);
         buildLinkGraph(phoenixConnection);
-        processValidationCheck();
+        processValidationCheck(phoenixConnection);
     }
 
     public Set<PhckRow> getInvalidRowSet() {

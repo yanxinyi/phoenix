@@ -20,11 +20,16 @@ package org.apache.phoenix.mapreduce.util;
 import org.apache.phoenix.schema.PIndexState;
 import org.apache.phoenix.schema.PTable;
 import org.apache.phoenix.schema.PTableType;
+import org.apache.hadoop.hbase.TableName;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYSTEM_SCHEMA_NAME;
+import static org.apache.phoenix.mapreduce.util.PhckUtil.EMPTY_COLUMN_VALUE;
+import static org.apache.phoenix.mapreduce.util.PhckUtil.NULL_VALUE;
+import static org.apache.phoenix.mapreduce.util.PhckUtil.constructTableName;
 
 /**
  *
@@ -76,6 +81,7 @@ public class PhckTable {
     List<PhckTable> children;
     private List<PhckRow> relationRows;
     PhckUtil.PHCK_STATE phckState;
+    private TableName indexPhysicalName;
 
 
     public PhckTable(String tenantId, String tableSchema, String tableName, String tableType,
@@ -100,8 +106,38 @@ public class PhckTable {
         }
     }
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(getSerializedValue());
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (getClass() != obj.getClass())
+            return false;
+        PhckTable other = (PhckTable) obj;
+        if (this.getSerializedValue().compareTo(other.getSerializedValue()) != 0)
+            return false;
+        return true;
+    }
+
+    public String getSerializedValue() {
+        return this.tenantId + "," + this.tableSchema + "."
+                + this.tableName + "." + this.tableType;
+    }
+
+    public TableName getHBaseTableName() {
+        if (this.tableSchema == null || this.tableSchema.equals(NULL_VALUE)
+                || this.tableSchema.equals(EMPTY_COLUMN_VALUE)) {
+            return TableName.valueOf(this.tableName);
+        }
+        return TableName.valueOf(this.tableSchema + ":" + this.tableName);
+    }
+
     public String getFullName() {
-        return this.tenantId + "," + this.tableSchema + "." + this.tableName;
+        return constructTableName(this.tableName, this.tableSchema, this.tenantId);
     }
 
     public int getParentTableHeadRowColumnCount() {
@@ -222,6 +258,25 @@ public class PhckTable {
 
     public void setPhckState(PhckUtil.PHCK_STATE phckState) {
         this.phckState = phckState;
+    }
+
+    public void setParent(PhckTable parent) {
+        this.parent = parent;
+    }
+
+    public void setPhysicalTable(PhckTable physicalTable) {
+        this.physicalTable = physicalTable;
+    }
+
+    public void setIndexPhysicalName(String indexPhysicalName) {
+        if (indexPhysicalName.contains(".")) {
+            indexPhysicalName = indexPhysicalName.replace('.', ':');
+        }
+        this.indexPhysicalName = TableName.valueOf(indexPhysicalName);
+    }
+
+    public TableName getIndexPhysicalName() {
+        return indexPhysicalName;
     }
 
     public boolean isValidQualifierRowCount() {

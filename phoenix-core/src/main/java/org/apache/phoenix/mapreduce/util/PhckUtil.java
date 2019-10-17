@@ -30,12 +30,15 @@ import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.*;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYSTEM_CATALOG_NAME;
 
 public class PhckUtil {
+    public static final String EMPTY_COLUMN_VALUE = " ";
+    public static final String NULL_VALUE = "null";
+
     public enum PHCK_STATE {
         ORPHAN_ROW,
         ORPHAN_VIEW,
         MISMATCH_COLUMN_COUNT,
         INVALID_SYSTEM_TABLE_LINK,
-        INVALID_SYSTEM_TABLE,
+        INVALID_TABLE,
         INVALID_CHILD_LINK_ROW,
         VALID,
     }
@@ -70,5 +73,21 @@ public class PhckUtil {
         HelpFormatter formatter = new HelpFormatter();
         formatter.printHelp("help", options);
         System.exit(exitCode);
+    }
+
+    public static String constructTableName(String tableName, String tableSchema, String tenantId) {
+
+        if (tableSchema != null && tableSchema.length() != 0 &&
+                !tableSchema.equals(EMPTY_COLUMN_VALUE) &&
+                !tableSchema.equals(NULL_VALUE))  {
+            tableName = tableSchema + "." + tableName;
+        }
+        if (tenantId != null && tenantId.length() != 0 &&
+                !tenantId.equals(EMPTY_COLUMN_VALUE) &&
+                !tenantId.equals(NULL_VALUE)) {
+            tableName = tenantId + "," + tableName;
+        }
+
+        return tableName;
     }
 }

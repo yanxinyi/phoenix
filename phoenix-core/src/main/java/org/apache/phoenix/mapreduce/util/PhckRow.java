@@ -20,9 +20,14 @@ package org.apache.phoenix.mapreduce.util;
 import org.apache.phoenix.schema.PTable;
 
 import java.sql.ResultSet;
+import java.util.Objects;
+
+import static org.apache.phoenix.mapreduce.util.PhckUtil.constructTableName;
+import static org.apache.phoenix.mapreduce.util.PhckUtil.EMPTY_COLUMN_VALUE;
+import static org.apache.phoenix.mapreduce.util.PhckUtil.NULL_VALUE;
 
 public class PhckRow {
-    private final String EMPTY_COLUMN_VALUE = " ";
+
     private String tenantId;
     private String tableSchema;
     private String tableName;
@@ -46,6 +51,9 @@ public class PhckRow {
         this.tableName = resultSet.getString(3);
         this.columnName = resultSet.getString(4);
         this.columnFamily = resultSet.getString(5);
+        if (this.columnFamily != null && this.columnFamily.contains(":")) {
+            this.columnFamily = this.columnFamily.replace(':', '.');
+        }
         this.linkType = resultSet.getString(6);
 
         if (this.phckRowResource == PhckUtil.PHCK_ROW_RESOURCE.CATALOG) {
@@ -61,8 +69,40 @@ public class PhckRow {
         }
     }
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(getSerializedValue());
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (getClass() != obj.getClass())
+            return false;
+        PhckTable other = (PhckTable) obj;
+        if (this.getSerializedValue().compareTo(other.getSerializedValue()) != 0)
+            return false;
+        return true;
+    }
+
+    public String getSerializedValue() {
+        return this.tenantId + "," + this.tableSchema + "." + this.tableName + "." +
+                this.getLinkType() + "." + this.phckRowResource + "." + this.columnFamily + "." +
+                this.columnName + "." ;
+    }
+
+
     public String getFullName() {
-        return this.tenantId + "," + this.tableSchema + "." + this.tableName;
+        return constructTableName(this.tableName, this.tableSchema, this.tenantId);
+    }
+
+    public String getRelatedTableFullName() {
+        if (this.columnFamily.contains(".")) {
+            return constructTableName(this.columnFamily, null, this.tenantId);
+        }
+        return constructTableName(this.columnFamily, this.tableSchema, this.tenantId);
+
     }
 
     public boolean isSchemaRow() {
