@@ -159,6 +159,10 @@ public final class PhoenixConfigurationUtil {
 
     public static final String MAPREDUCE_JOB_TYPE = "phoenix.mapreduce.jobtype";
 
+    public static final String MAPREDUCE_SPLIT_BY_VIEW_TTL = "phoenix.mapreduce.split.by.view_ttl";
+
+    public static final String MAPREDUCE_VIEW_TTL_VALUE = "phoenix.mapreduce.view_ttl_value";
+
     /**
      * Determines type of Phoenix Map Reduce job.
      * 1. QUERY allows running arbitrary queries without aggregates
@@ -166,7 +170,8 @@ public final class PhoenixConfigurationUtil {
      */
     public enum MRJobType {
         QUERY,
-        UPDATE_STATS
+        UPDATE_STATS,
+        VIEW_TTL_DELETE
     }
 
     public enum SchemaType {
@@ -412,7 +417,8 @@ public final class PhoenixConfigurationUtil {
     public static String getSelectStatement(final Configuration configuration) throws SQLException {
         Preconditions.checkNotNull(configuration);
         String selectStmt = configuration.get(SELECT_STATEMENT);
-        if(isNotEmpty(selectStmt)) {
+        if(isNotEmpty(selectStmt) &&
+                configuration.get(PhoenixConfigurationUtil.MAPREDUCE_SPLIT_BY_VIEW_TTL) == null) {
             return selectStmt;
         }
         final String tableName = getInputTableName(configuration);

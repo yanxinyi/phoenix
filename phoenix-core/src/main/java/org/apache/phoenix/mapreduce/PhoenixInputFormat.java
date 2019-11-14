@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -84,9 +85,23 @@ public class PhoenixInputFormat<T extends DBWritable> extends InputFormat<NullWr
 
     @Override
     public List<InputSplit> getSplits(JobContext context) throws IOException, InterruptedException {  
-        final Configuration configuration = context.getConfiguration();
-        final QueryPlan queryPlan = getQueryPlan(context,configuration);
-        return generateSplits(queryPlan, configuration);
+        Configuration configuration = context.getConfiguration();
+        List<InputSplit> listSplits = new ArrayList<>();
+        if (configuration.get(PhoenixConfigurationUtil.MAPREDUCE_SPLIT_BY_VIEW_TTL) == null) {
+            final QueryPlan queryPlan = getQueryPlan(context, configuration);
+            listSplits = generateSplits(queryPlan, configuration);
+        } else {
+            String[] viewLists = configuration.get(
+                    PhoenixConfigurationUtil.MAPREDUCE_SPLIT_BY_VIEW_TTL).split(",");
+            for (String view : viewLists) {
+
+                PhoenixConfigurationUtil.setInputTableName(configuration, view);
+                final QueryPlan queryPlan = getQueryPlan(context, configuration);
+                listSplits.addAll(generateSplits(queryPlan, configuration));
+            }
+        }
+
+        return listSplits;
     }
 
     private List<InputSplit> generateSplits(final QueryPlan qplan, Configuration config) throws IOException {
@@ -132,7 +147,7 @@ public class PhoenixInputFormat<T extends DBWritable> extends InputFormat<NullWr
 
                     psplits.add(new PhoenixInputSplit(Collections.singletonList(aScan), regionSize, regionLocation));
                 }
-                } else {
+            } else {
                 if (LOGGER.isDebugEnabled()) {
                     LOGGER.debug("Scan count[" + scans.size() + "] : " + Bytes.toStringBinary(scans
                             .get(0).getStartRow()) + " ~ " + Bytes.toStringBinary(scans.get(scans
@@ -189,6 +204,9 @@ public class PhoenixInputFormat<T extends DBWritable> extends InputFormat<NullWr
                       // This select statement indicates MR job for full table scan for stats collection
                       selectStatement = "SELECT * FROM " + PhoenixConfigurationUtil.getInputTableName(configuration);
                       break;
+                  case VIEW_TTL_DELETE:
+                      selectStatement = "SELECT COUNT(*) FROM " + PhoenixConfigurationUtil.getInputTableName(configuration);
+                      break;
                   default:
                       selectStatement = PhoenixConfigurationUtil.getSelectStatement(configuration);
               }
@@ -201,6 +219,12 @@ public class PhoenixInputFormat<T extends DBWritable> extends InputFormat<NullWr
 
               if (mrJobType == MRJobType.UPDATE_STATS) {
                   StatisticsUtil.setScanAttributes(scan, null);
+              } else if (mrJobType == MRJobType.VIEW_TTL_DELETE) {
+                  scan.setCacheBlocks(false);
+                  scan.setMaxVersions();
+                  byte[] viewTtlByte = new byte[] {Byte.valueOf(configuration.get(
+                          PhoenixConfigurationUtil.MAPREDUCE_VIEW_TTL_VALUE))};
+                  scan.setAttribute(PhoenixConfigurationUtil.MAPREDUCE_VIEW_TTL_VALUE, viewTtlByte);
               }
 
               // since we can't set a scn on connections with txn set TX_SCN attribute so that the max time range is set by BaseScannerRegionObserver
@@ -249,5 +273,4 @@ public class PhoenixInputFormat<T extends DBWritable> extends InputFormat<NullWr
             throw new RuntimeException(e);
         }
     }
-
 }
