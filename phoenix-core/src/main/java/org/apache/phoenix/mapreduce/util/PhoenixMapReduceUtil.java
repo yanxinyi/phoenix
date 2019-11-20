@@ -23,10 +23,12 @@ import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.db.DBWritable;
 import org.apache.phoenix.mapreduce.PhoenixInputFormat;
+import org.apache.phoenix.mapreduce.PhoenixMultiViewInputFormat;
 import org.apache.phoenix.mapreduce.PhoenixOutputFormat;
 import org.apache.phoenix.mapreduce.util.PhoenixConfigurationUtil.SchemaType;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -144,6 +146,14 @@ public final class PhoenixMapReduceUtil {
 
     }
 
+    public static void setMultiViewInput(List<ViewInfo> viewInfoList, final Job job,
+                                         final Class<? extends DBWritable> inputClass) {
+        job.setInputFormatClass(PhoenixMultiViewInputFormat.class);
+        final Configuration configuration = job.getConfiguration();
+        PhoenixConfigurationUtil.setInputClass(configuration, inputClass);
+        PhoenixConfigurationUtil.setSchemaType(configuration, SchemaType.QUERY);
+    }
+
     /**
      *
      * @param job
@@ -172,6 +182,8 @@ public final class PhoenixMapReduceUtil {
         PhoenixConfigurationUtil.setInputClass(configuration,inputClass);
         return configuration;
     }
+
+
 
     private static Configuration setInput(final Job job, final Class<? extends DBWritable> inputClass,
                                           final Class<? extends InputFormat> inputFormatClass, final String tableName){

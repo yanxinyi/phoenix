@@ -157,6 +157,11 @@ public final class PhoenixConfigurationUtil {
 
     public static final String MAPREDUCE_TENANT_ID = "phoenix.mapreduce.tenantid";
 
+    public static final String MAPREDUCE_VIEW_TTL_INFO_LIST = "phoenix.mapreduce.view_info_list";
+
+    public static final String MAPREDUCE_VIEW_TTL = "phoenix.mapreduce.view_ttl";
+
+
     public enum SchemaType {
         TABLE,
         QUERY;
@@ -389,7 +394,8 @@ public final class PhoenixConfigurationUtil {
     public static String getSelectStatement(final Configuration configuration) throws SQLException {
         Preconditions.checkNotNull(configuration);
         String selectStmt = configuration.get(SELECT_STATEMENT);
-        if(isNotEmpty(selectStmt)) {
+        if(isNotEmpty(selectStmt) &&
+                configuration.get(PhoenixConfigurationUtil.MAPREDUCE_VIEW_TTL) == null) {
             return selectStmt;
         }
         final String tableName = getInputTableName(configuration);

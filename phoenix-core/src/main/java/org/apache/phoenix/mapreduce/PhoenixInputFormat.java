@@ -78,8 +78,6 @@ public class PhoenixInputFormat<T extends DBWritable> extends InputFormat<NullWr
         final Class<T> inputClass = (Class<T>) PhoenixConfigurationUtil.getInputClass(configuration);
         return getPhoenixRecordReader(inputClass, configuration, queryPlan);
     }
-    
-   
 
     @Override
     public List<InputSplit> getSplits(JobContext context) throws IOException, InterruptedException {  
@@ -88,7 +86,7 @@ public class PhoenixInputFormat<T extends DBWritable> extends InputFormat<NullWr
         return generateSplits(queryPlan, configuration);
     }
 
-    private List<InputSplit> generateSplits(final QueryPlan qplan, Configuration config) throws IOException {
+    protected List<InputSplit> generateSplits(final QueryPlan qplan, Configuration config) throws IOException {
         // We must call this in order to initialize the scans and splits from the query plan
         setupParallelScansFromQueryPlan(qplan);
         final List<KeyRange> splits = qplan.getSplits();
@@ -170,6 +168,7 @@ public class PhoenixInputFormat<T extends DBWritable> extends InputFormat<NullWr
             final String txnScnValue = configuration.get(PhoenixConfigurationUtil.TX_SCN_VALUE);
             final String currentScnValue = configuration.get(PhoenixConfigurationUtil.CURRENT_SCN_VALUE);
             final String tenantId = configuration.get(PhoenixConfigurationUtil.MAPREDUCE_TENANT_ID);
+            final String view_ttl = configuration.get(PhoenixConfigurationUtil.MAPREDUCE_VIEW_TTL);
             final Properties overridingProps = new Properties();
             if(txnScnValue==null && currentScnValue!=null) {
                 overridingProps.put(PhoenixRuntime.CURRENT_SCN_ATTRIB, currentScnValue);
@@ -192,6 +191,11 @@ public class PhoenixInputFormat<T extends DBWritable> extends InputFormat<NullWr
                 scan.setAttribute(BaseScannerRegionObserver.TX_SCN, Bytes.toBytes(Long.valueOf(txnScnValue)));
               }
 
+              if (view_ttl != null) {
+                  Byte viewTtlByte = Byte.valueOf(view_ttl);
+                  byte[] bytes = new byte[] {viewTtlByte};
+                  scan.setAttribute("view_ttl", bytes);
+              }
               // setting the snapshot configuration
               String snapshotName = configuration.get(PhoenixConfigurationUtil.SNAPSHOT_NAME_KEY);
               if (snapshotName != null)
