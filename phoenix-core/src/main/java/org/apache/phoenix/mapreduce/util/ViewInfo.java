@@ -17,7 +17,14 @@
  */
 package org.apache.phoenix.mapreduce.util;
 
-public class ViewInfo {
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableUtils;
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+
+public class ViewInfo implements Writable {
     public static final String VIEW_INFO_SERIALIZED_SPLITTER = "||";
 
     public static final String VIEW_INFO_DESERIALIZED_SPLITTER = "\\|\\|";
@@ -59,5 +66,18 @@ public class ViewInfo {
 
     public String serialized() {
         return this.tenantId + "," + this.viewName + "," + this.viewTtl;
+    }
+
+
+    @Override public void write(DataOutput output) throws IOException {
+        WritableUtils.writeString(output, tenantId);
+        WritableUtils.writeString(output, viewName);
+        WritableUtils.writeVLong(output, viewTtl);
+    }
+
+    @Override public void readFields(DataInput input) throws IOException {
+        setTenantId(WritableUtils.readString(input));
+        viewName = WritableUtils.readString(input);
+        viewTtl = WritableUtils.readVLong(input);
     }
 }
