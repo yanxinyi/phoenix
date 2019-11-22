@@ -23,7 +23,6 @@ import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.db.DBWritable;
 import org.apache.phoenix.mapreduce.PhoenixInputFormat;
-import org.apache.phoenix.mapreduce.PhoenixMultiViewInputFormat;
 import org.apache.phoenix.mapreduce.PhoenixOutputFormat;
 import org.apache.phoenix.mapreduce.util.PhoenixConfigurationUtil.SchemaType;
 
