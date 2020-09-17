@@ -18,6 +18,10 @@
 package org.apache.phoenix.jdbc;
 
 import static org.apache.phoenix.coprocessor.ScanRegionObserver.DYN_COLS_METADATA_CELL_QUALIFIER;
+import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYSTEM_CATALOG_SCHEMA;
+import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYSTEM_CATALOG_TABLE;
+import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.VIEW_INDEX_ID;
+import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.VIEW_INDEX_ID_DATA_TYPE;
 import static org.apache.phoenix.query.QueryServices.WILDCARD_QUERY_DYNAMIC_COLS_ATTRIB;
 import static org.apache.phoenix.query.QueryServicesOptions.DEFAULT_WILDCARD_QUERY_DYNAMIC_COLS_ATTRIB;
 
@@ -41,6 +45,7 @@ import java.sql.SQLWarning;
 import java.sql.SQLXML;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.text.Format;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,6 +80,7 @@ import org.apache.phoenix.monitoring.OverAllQueryMetrics;
 import org.apache.phoenix.monitoring.ReadMetricQueue;
 import org.apache.phoenix.schema.PColumn;
 import org.apache.phoenix.schema.PColumnImpl;
+import org.apache.phoenix.schema.ViewIndexIdDataTypeColumnNotFoundException;
 import org.apache.phoenix.schema.tuple.ResultTuple;
 import org.apache.phoenix.schema.tuple.Tuple;
 import org.apache.phoenix.schema.types.PBoolean;
@@ -582,7 +588,16 @@ public class PhoenixResultSet implements ResultSet, SQLCloseable {
     public Object getObject(int columnIndex) throws SQLException {
         checkCursorState();
         ColumnProjector projector = getRowProjector().getColumnProjector(columnIndex-1);
-        Object value = projector.getValue(currentRow, projector.getExpression().getDataType(), ptr);
+        Object value;
+        if (projector instanceof ExpressionProjector && projector.getName().equals(VIEW_INDEX_ID)
+            && SchemaUtil.getSchemaNameFromFullName(
+                    projector.getTableName()).equals(SYSTEM_CATALOG_SCHEMA)
+            && SchemaUtil.getTableNameFromFullName(
+                    projector.getTableName()).equals(SYSTEM_CATALOG_TABLE)) {
+            value = getViewIndexId(projector);
+        } else {
+            value = projector.getValue(currentRow, projector.getExpression().getDataType(), ptr);
+        }
         wasNull = (value == null);
         return value;
     }
@@ -1544,4 +1559,27 @@ public class PhoenixResultSet implements ResultSet, SQLCloseable {
                 this.rowProjector.projectDynColsInWildcardQueries());
     }
 
+    private Object getViewIndexId(ColumnProjector projector) throws SQLException {
+        Object value;
+        boolean isBigint = false;
+        boolean isViewIndexIdDataTypeColumnInclude = true;
+        Object viewIndexIdDataType = null;
+        try {
+            viewIndexIdDataType = getObject(VIEW_INDEX_ID_DATA_TYPE);
+        } catch (Exception e) {
+            isViewIndexIdDataTypeColumnInclude = false;
+        }
+        if (!isViewIndexIdDataTypeColumnInclude ||
+                (viewIndexIdDataType != null && viewIndexIdDataType.equals(Types.BIGINT))) {
+            // if VIEW_INDEX_ID_DATA_TYPE column is not selected, using BIGINT as a default type
+            isBigint = true;
+        }
+        try {
+            value = ((ExpressionProjector)projector).getViewIndexIdValue(isBigint, ptr, currentRow);
+        } catch (Exception e) {
+            // raise exception says need to have VIEW_INDEX_ID_DATA_TYPE as part of select column
+            throw new ViewIndexIdDataTypeColumnNotFoundException();
+        }
+        return value;
+    }
 }

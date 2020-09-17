@@ -247,7 +247,6 @@ public enum SQLExceptionCode {
         }
     }),
     TABLES_NOT_IN_SYNC(1140, "42M05", "Tables not in sync for some properties."),
-
     // Syntax error
     TYPE_NOT_SUPPORTED_FOR_OPERATOR(1014, "42Y01", "The operator does not support the operand type."),
     AGGREGATE_IN_GROUP_BY(1016, "42Y26", "Aggregate expressions may not be used in GROUP BY."),
@@ -335,7 +334,6 @@ public enum SQLExceptionCode {
     ABOVE_INDEX_NON_ASYNC_THRESHOLD(1097, "44A34", "The estimated read size for index creation "
             + "is higher than " + QueryServices.CLIENT_INDEX_ASYNC_THRESHOLD+ ". You can edit the"
             + " limit or create ASYNC index."),
-
     /** Sequence related */
     SEQUENCE_ALREADY_EXIST(1200, "42Z00", "Sequence already exists.", new Factory() {
         @Override
@@ -431,6 +429,8 @@ public enum SQLExceptionCode {
             PTable.LinkType.CHILD_TABLE + ") for view"),
     TABLE_NOT_IN_REGION(1145, "XCL45", "No modifications allowed on this table. "
     + "Table not in this region."),
+    VIEW_INDEX_ID_DATA_TYPE_COLUMN_NOT_FOUND(1146, "XCL46",
+            "You need to include VIEW_INDEX_ID_DATA_TYPE column to retrieve the DATA_TYPE FOR VIEW_INDEX_ID"),
     /**
      * Implementation defined class. Phoenix internal error. (errorcode 20, sqlstate INT).
      */

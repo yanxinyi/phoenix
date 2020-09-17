@@ -19,12 +19,15 @@ package org.apache.phoenix.compile;
 
 
 import java.sql.SQLException;
+import java.sql.Types;
 
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.phoenix.expression.Expression;
+import org.apache.phoenix.expression.RowKeyColumnExpression;
 import org.apache.phoenix.schema.types.PDataType;
 import org.apache.phoenix.schema.tuple.Tuple;
-
+import org.apache.phoenix.schema.types.PLong;
+import org.apache.phoenix.schema.types.PSmallint;
 
 
 /**
@@ -71,7 +74,7 @@ public class ExpressionProjector implements ColumnProjector {
             }
             if (ptr.getLength() == 0) {
                 return null;
-            }        
+            }
             return type.toObject(ptr, expression.getDataType(), expression.getSortOrder(), expression.getMaxLength(), expression.getScale());
         } catch (RuntimeException e) {
             // FIXME: Expression.evaluate does not throw SQLException
@@ -81,6 +84,24 @@ public class ExpressionProjector implements ColumnProjector {
             }
             throw e;
         }
+    }
+
+    public final Object getViewIndexIdValue(boolean isBigint, ImmutableBytesWritable ptr,
+                                            Tuple tuple) {
+        Expression expression = getExpression();
+        if (!expression.evaluate(tuple, ptr)) {
+            return null;
+        }
+        if (ptr.getLength() == 0) {
+            return null;
+        }
+        if (!isBigint) {
+            return PSmallint.INSTANCE.toObject(ptr, PSmallint.INSTANCE,
+                    expression.getSortOrder(), expression.getMaxLength(), expression.getScale());
+        }
+
+        return PLong.INSTANCE.toObject(ptr, PLong.INSTANCE,
+                    expression.getSortOrder(), expression.getMaxLength(), expression.getScale());
     }
 
     @Override
