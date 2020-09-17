@@ -3679,6 +3679,15 @@ public class ConnectionQueryServicesImpl extends DelegateQueryServices implement
                 MIN_SYSTEM_TABLE_TIMESTAMP_4_16_0,
                 PhoenixDatabaseMetaData.PHOENIX_TTL_HWM + " "
                         + PInteger.INSTANCE.getSqlTypeName());
+
+            try (HBaseAdmin admin = getAdmin()) {
+                if (UpgradeUtil.updateViewIndexIdColumnDataTypeFromShortToLongIfNeeds(
+                        metaConnection, admin)) {
+                    LOGGER.info("Updated VIEW_INDEX_ID data type from SMALLINT TO BIGINT.");
+                } else {
+                    LOGGER.error("Updating VIEW_INDEX_ID data type failed.");
+                }
+            }
         }
         return metaConnection;
     }

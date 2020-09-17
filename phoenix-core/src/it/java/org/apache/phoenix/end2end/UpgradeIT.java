@@ -18,9 +18,14 @@
 package org.apache.phoenix.end2end;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYSTEM_CATALOG_TABLE;
+import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.VIEW_INDEX_ID;
+import static org.apache.phoenix.query.QueryConstants.SYSTEM_SCHEMA_NAME;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -31,6 +36,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -42,7 +48,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.snapshot.SnapshotCreationException;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.phoenix.coprocessor.MetaDataProtocol;
@@ -64,7 +77,11 @@ import org.apache.phoenix.schema.PTable.LinkType;
 import org.apache.phoenix.schema.PTableType;
 import org.apache.phoenix.schema.SequenceAllocation;
 import org.apache.phoenix.schema.SequenceKey;
+import org.apache.phoenix.schema.types.PInteger;
+import org.apache.phoenix.schema.types.PLong;
+import org.apache.phoenix.schema.types.PSmallint;
 import org.apache.phoenix.util.EnvironmentEdgeManager;
+import org.apache.phoenix.util.KeyValueUtil;
 import org.apache.phoenix.util.MetaDataUtil;
 import org.apache.phoenix.util.PhoenixRuntime;
 import org.apache.phoenix.util.PropertiesUtil;
@@ -672,4 +689,61 @@ public class UpgradeIT extends ParallelStatsDisabledIT {
         return key;
     }
 
+    @Test
+    public void testUpgradeViewIndexIdDataType() throws Exception {
+        byte[] rowKey = SchemaUtil.getColumnKey(null,
+                SYSTEM_SCHEMA_NAME, SYSTEM_CATALOG_TABLE, VIEW_INDEX_ID,
+                PhoenixDatabaseMetaData.TABLE_FAMILY);
+        byte[] syscatBytes = PhoenixDatabaseMetaData.SYSTEM_CATALOG_NAME.getBytes();
+        byte[] viewIndexIdTypeCellValueIn414 = PInteger.INSTANCE.toBytes(Types.SMALLINT);
+        byte[] viewIndexIdTypeCellValueIn416 = PInteger.INSTANCE.toBytes(Types.BIGINT);
+
+        // update the VIEW_INDEX_ID 0:DATAT_TYPE cell value to SMALLINT
+        // (4.14 and prior version is a SMALLINT column)
+        updateViewIndexIdColumnValue(rowKey, syscatBytes, viewIndexIdTypeCellValueIn414);
+        verifyExpectedCellValue(rowKey,syscatBytes, viewIndexIdTypeCellValueIn414);
+
+        // calling UpgradeUtil to mock the upgrade VIEW_INDEX_ID data type to BIGINT
+        try (PhoenixConnection conn = getConnection(false, null).
+                unwrap(PhoenixConnection.class);
+             HBaseAdmin admin = conn.getQueryServices().getAdmin()) {
+            UpgradeUtil.updateViewIndexIdColumnDataTypeFromShortToLongIfNeeds(conn, admin);
+        }
+        verifyExpectedCellValue(rowKey,syscatBytes, viewIndexIdTypeCellValueIn416);
+    }
+
+    private void updateViewIndexIdColumnValue(byte[] rowKey, byte[] syscatBytes,
+                                              byte[] newColumnValue) throws Exception {
+
+        try (PhoenixConnection conn =
+                     DriverManager.getConnection(getUrl()).unwrap(PhoenixConnection.class);
+            Table sysTable = conn.getQueryServices().getTable(syscatBytes)) {
+            KeyValue viewIndexIdKV = KeyValueUtil.newKeyValue(rowKey,
+                    PhoenixDatabaseMetaData.TABLE_FAMILY_BYTES,
+                    PhoenixDatabaseMetaData.DATA_TYPE_BYTES,
+                    MetaDataProtocol.MIN_SYSTEM_TABLE_TIMESTAMP,
+                    newColumnValue);
+            Put viewIndexIdPut = new Put(rowKey);
+            viewIndexIdPut.add(viewIndexIdKV);
+            sysTable.put(viewIndexIdPut);
+        }
+    }
+
+    private void verifyExpectedCellValue(byte[] rowKey, byte[] syscatBytes,
+                                         byte[] expectedDateTypeBytes) throws Exception {
+        try(PhoenixConnection conn = getConnection(false, null).unwrap(PhoenixConnection.class);
+            Table sysTable = conn.getQueryServices().getTable(syscatBytes)) {
+            Scan s = new Scan();
+            s.setRowPrefixFilter(rowKey);
+            s.addColumn(PhoenixDatabaseMetaData.TABLE_FAMILY_BYTES,
+                    PhoenixDatabaseMetaData.DATA_TYPE_BYTES);
+            ResultScanner scanner = sysTable.getScanner(s);
+            Result result= scanner.next();
+            assertNotNull(result);
+            Cell cell = result.getColumnLatestCell(
+                    PhoenixDatabaseMetaData.TABLE_FAMILY_BYTES,
+                    PhoenixDatabaseMetaData.DATA_TYPE_BYTES);
+            assertArrayEquals(expectedDateTypeBytes, cell.getValue());
+        }
+    }
 }
