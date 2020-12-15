@@ -18,18 +18,18 @@
 package org.apache.phoenix.end2end;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.CompareOperator;
-import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.hadoop.hbase.filter.RowFilter;
 import org.apache.hadoop.hbase.filter.RegexStringComparator;
 import org.apache.phoenix.mapreduce.PhoenixTTLTool;
 import org.apache.phoenix.mapreduce.util.PhoenixMultiInputUtil;
-import org.apache.phoenix.query.HBaseFactoryProvider;
+import org.apache.phoenix.util.SchemaUtil;
+import org.apache.phoenix.util.TestUtil;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -44,7 +44,8 @@ import static org.junit.Assert.assertTrue;
 @Category(NeedsOwnMiniClusterTest.class)
 public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
 
-    private final long PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND = 1;
+    private final long PHOENIX_TTL_EXPIRE_IN_A_SECOND = 1;
+    private final long MILLISECOND = 1000;
     private final long PHOENIX_TTL_EXPIRE_IN_A_DAY = 1000 * 60 * 60 * 24;
 
     private final String VIEW_PREFIX1 = "V01";
@@ -62,10 +63,12 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
 
     private void verifyNumberOfRowsFromHBaseLevel(String tableName, String regrex, int expectedRows)
             throws Exception {
-        try (Table table = HBaseFactoryProvider.getHConnectionFactory().
-                createConnection(config).getTable(TableName.valueOf(tableName))) {
+        try (Table table = driver.getConnectionQueryServices(getUrl(), TestUtil.TEST_PROPERTIES)
+                .getTable(SchemaUtil.getTableNameAsBytes(
+                        SchemaUtil.getSchemaNameFromFullName(tableName),
+                        SchemaUtil.getTableNameFromFullName(tableName)))) {
             Filter filter =
-                    new RowFilter(CompareOperator.EQUAL, new RegexStringComparator(regrex));
+                    new RowFilter(CompareFilter.CompareOp.EQUAL, new RegexStringComparator(regrex));
             Scan scan = new Scan();
             scan.setFilter(filter);
             assertEquals(expectedRows, getRowCount(table,scan));
@@ -88,14 +91,14 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
 
     private long getRowCount(Table table, Scan scan) throws Exception {
         ResultScanner scanner = table.getScanner(scan);
-        int count = 0;
-        for (Result dummy : scanner) {
-            count++;
+        int numMatchingRows = 0;
+        for (Result result = scanner.next(); result != null; result = scanner.next()) {
+            numMatchingRows++;
         }
-        scanner.close();
-        return count;
-    }
 
+        scanner.close();
+        return numMatchingRows;
+    }
     private void createMultiTenantTable(Connection conn, String tableName) throws Exception {
         String ddl = "CREATE TABLE " + tableName +
                 " (TENANT_ID CHAR(10) NOT NULL, ID CHAR(10) NOT NULL, NUM BIGINT CONSTRAINT " +
@@ -136,12 +139,15 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
             createMultiTenantTable(globalConn, baseTableFullName);
             globalConn.createStatement().execute(String.format(VIEW_DDL_WITH_ID_PREFIX_AND_TTL,
                     globalViewName, baseTableFullName, VIEW_PREFIX1,
-                    PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                    PHOENIX_TTL_EXPIRE_IN_A_SECOND));
 
             globalConn.createStatement().execute(
                     String.format(VIEW_INDEX_DDL, indexTable1, globalViewName, "A,B"));
             globalConn.createStatement().execute(
                     String.format(VIEW_INDEX_DDL, indexTable2, globalViewName, "C,D"));
+
+            tenant1Connection.setAutoCommit(true);
+            tenant2Connection.setAutoCommit(true);
 
             tenant1Connection.createStatement().execute(
                     String.format(TENANT_VIEW_DDL,tenantView1, globalViewName));
@@ -150,11 +156,12 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
 
             tenant1Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantView1));
-            tenant1Connection.commit();
             verifyNumberOfRows(baseTableFullName, tenant1, 1, globalConn);
             tenant2Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantView2));
-            tenant2Connection.commit();
+
+            // wait the row to be expired and index to be updated
+            Thread.sleep(PHOENIX_TTL_EXPIRE_IN_A_SECOND * MILLISECOND);
             verifyNumberOfRows(baseTableFullName, tenant2, 1, globalConn);
 
             // the view has 2 view indexes, so upsert 1 row(base table) will result
@@ -208,7 +215,7 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
 
             globalConn.createStatement().execute(String.format(VIEW_DDL_WITH_ID_PREFIX_AND_TTL,
                     globalViewName1, baseTableFullName, VIEW_PREFIX1,
-                    PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                    PHOENIX_TTL_EXPIRE_IN_A_SECOND));
             globalConn.createStatement().execute(String.format(VIEW_DDL_WITH_ID_PREFIX_AND_TTL,
                     globalViewName2, baseTableFullName, VIEW_PREFIX2, PHOENIX_TTL_EXPIRE_IN_A_DAY));
 
@@ -222,20 +229,22 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
             globalConn.createStatement().execute(
                     String.format(VIEW_INDEX_DDL, indexTable4, globalViewName2, "C,D"));
 
-            tenant1Connection.createStatement().execute(
-                    String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName1));
-            tenant1Connection.commit();
-            tenant1Connection.createStatement().execute(
-                    String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName2));
-            tenant1Connection.commit();
-            verifyNumberOfRows(baseTableFullName, tenant1, 2, globalConn);
+            tenant1Connection.setAutoCommit(true);
+            tenant2Connection.setAutoCommit(true);
 
+            tenant1Connection.createStatement().execute(
+                    String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName1));
+            tenant1Connection.createStatement().execute(
+                    String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName2));
             tenant2Connection.createStatement().execute(
                     String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName1));
-            tenant2Connection.commit();
             tenant2Connection.createStatement().execute(
                     String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName2));
-            tenant2Connection.commit();
+
+            // wait the row to be expired and index to be updated
+            Thread.sleep(PHOENIX_TTL_EXPIRE_IN_A_SECOND * MILLISECOND);
+
+            verifyNumberOfRows(baseTableFullName, tenant1, 2, globalConn);
             verifyNumberOfRows(baseTableFullName, tenant2, 2, globalConn);
 
             verifyNumberOfRowsFromHBaseLevel(indexTable, ".*" + tenant1 + ".*", 4);
@@ -293,7 +302,7 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
 
             globalConn.createStatement().execute(
                     String.format(ddl, globalViewName1, VIEW_PREFIX1,
-                            PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                            PHOENIX_TTL_EXPIRE_IN_A_SECOND));
             globalConn.createStatement().execute(
                     String.format(ddl, globalViewName2, VIEW_PREFIX2, PHOENIX_TTL_EXPIRE_IN_A_DAY));
 
@@ -320,20 +329,22 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
             tenant2Connection.createStatement().execute(
                     String.format(ddl, tenantViewName2, globalViewName2));
 
-            tenant1Connection.createStatement().execute(
-                    String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName1));
-            tenant1Connection.commit();
-            tenant1Connection.createStatement().execute(
-                    String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName2));
-            tenant1Connection.commit();
-            verifyNumberOfRows(baseTableFullName, tenant1, 2, globalConn);
+            tenant1Connection.setAutoCommit(true);
+            tenant2Connection.setAutoCommit(true);
 
+            tenant1Connection.createStatement().execute(
+                    String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName1));
+            tenant1Connection.createStatement().execute(
+                    String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName2));
             tenant2Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName1));
-            tenant2Connection.commit();
             tenant2Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName2));
-            tenant2Connection.commit();
+
+            // wait the row to be expired and index to be updated
+            Thread.sleep(PHOENIX_TTL_EXPIRE_IN_A_SECOND * MILLISECOND);
+
+            verifyNumberOfRows(baseTableFullName, tenant1, 2, globalConn);
             verifyNumberOfRows(baseTableFullName, tenant2, 2, globalConn);
 
             verifyNumberOfRowsFromHBaseLevel(indexTable, ".*" + tenant1 + ".*", 4);
@@ -381,24 +392,27 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
 
             globalConn.createStatement().execute(
                     String.format(ddl, globalViewName1, VIEW_PREFIX1,
-                            PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                            PHOENIX_TTL_EXPIRE_IN_A_SECOND));
             globalConn.createStatement().execute(
                     String.format(ddl, globalViewName2, VIEW_PREFIX2, PHOENIX_TTL_EXPIRE_IN_A_DAY));
 
+            tenant1Connection.setAutoCommit(true);
+            tenant2Connection.setAutoCommit(true);
+
             tenant1Connection.createStatement().execute(
                     String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName1));
-            tenant1Connection.commit();
             tenant1Connection.createStatement().execute(
                     String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName2));
-            tenant1Connection.commit();
-            verifyNumberOfRows(baseTableFullName, tenant1, 2, globalConn);
 
             tenant2Connection.createStatement().execute(
                     String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName1));
-            tenant2Connection.commit();
             tenant2Connection.createStatement().execute(
                     String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName2));
-            tenant2Connection.commit();
+
+            // wait the row to be expired and index to be updated
+            Thread.sleep(PHOENIX_TTL_EXPIRE_IN_A_SECOND * MILLISECOND);
+
+            verifyNumberOfRows(baseTableFullName, tenant1, 2, globalConn);
             verifyNumberOfRows(baseTableFullName, tenant2, 2, globalConn);
 
             // running MR job to delete expired rows.
@@ -437,16 +451,20 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
 
             globalConn.createStatement().execute(
                     String.format(ddl, globalViewName1, VIEW_PREFIX1,
-                            PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                            PHOENIX_TTL_EXPIRE_IN_A_SECOND));
             globalConn.createStatement().execute(
                     String.format(ddl, globalViewName2, VIEW_PREFIX2, PHOENIX_TTL_EXPIRE_IN_A_DAY));
 
+            globalConn.setAutoCommit(true);
+
             globalConn.createStatement().execute(
                     String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName1));
-            globalConn.commit();
             globalConn.createStatement().execute(
                     String.format(UPSERT_TO_GLOBAL_VIEW_QUERY, globalViewName2));
-            globalConn.commit();
+
+            // wait the row to be expired and index to be updated
+            Thread.sleep(PHOENIX_TTL_EXPIRE_IN_A_SECOND * MILLISECOND);
+
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX1 + ".*", 1);
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX2 + ".*", 1);
 
@@ -492,7 +510,7 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
                     " AS SELECT * FROM " + baseTableFullName + " WHERE PK1=%d PHOENIX_TTL = %d";
 
             globalConn.createStatement().execute(
-                    String.format(ddl, globalViewName1, 1, PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                    String.format(ddl, globalViewName1, 1, PHOENIX_TTL_EXPIRE_IN_A_SECOND));
             globalConn.createStatement().execute(
                     String.format(ddl, globalViewName2, 2, PHOENIX_TTL_EXPIRE_IN_A_DAY));
 
@@ -506,13 +524,17 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
             globalConn.createStatement().execute(
                     String.format(ddl, indexTable4, globalViewName2, "C,ID,D"));
 
+            globalConn.setAutoCommit(true);
+
             String query = "UPSERT INTO %s (PK2,A,B,C,D,ID) VALUES(1,1,1,1,1,'%s')";
             globalConn.createStatement().execute(
                     String.format(query, globalViewName1, VIEW_PREFIX1));
-            globalConn.commit();
             globalConn.createStatement().execute(
                     String.format(query, globalViewName2, VIEW_PREFIX2));
-            globalConn.commit();
+
+            // wait the row to be expired and index to be updated
+            Thread.sleep(PHOENIX_TTL_EXPIRE_IN_A_SECOND * MILLISECOND);
+
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX1 + ".*", 1);
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX2 + ".*", 1);
             verifyNumberOfRowsFromHBaseLevel(indexTable, ".*" + VIEW_PREFIX1 + ".*", 2);
@@ -560,17 +582,21 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
                     "WHERE ID = '%s' PHOENIX_TTL = %d";
             tenant1Connection.createStatement().execute(
                     String.format(ddl, tenantViewName1, globalViewName1, VIEW_PREFIX1,
-                            PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                            PHOENIX_TTL_EXPIRE_IN_A_SECOND));
             tenant1Connection.createStatement().execute(
                     String.format(ddl, tenantViewName2, globalViewName1, VIEW_PREFIX2,
-                            PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                            PHOENIX_TTL_EXPIRE_IN_A_SECOND));
+
+            tenant1Connection.setAutoCommit(true);
 
             tenant1Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName1));
-            tenant1Connection.commit();
             tenant1Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName2));
-            tenant1Connection.commit();
+
+            // wait the row to be expired and index to be updated
+            Thread.sleep(PHOENIX_TTL_EXPIRE_IN_A_SECOND * MILLISECOND);
+
             verifyNumberOfRows(baseTableFullName, tenant1, 2, globalConn);
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX1 + ".*", 1);
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX2 + ".*", 1);
@@ -623,30 +649,32 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
                     "WHERE ID = '%s' PHOENIX_TTL = %d";
             tenant1Connection.createStatement().execute(
                     String.format(ddl, tenantViewName1, globalViewName1, VIEW_PREFIX1,
-                            PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                            PHOENIX_TTL_EXPIRE_IN_A_SECOND));
             tenant1Connection.createStatement().execute(
                     String.format(ddl, tenantViewName2, globalViewName2, VIEW_PREFIX2,
-                            PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                            PHOENIX_TTL_EXPIRE_IN_A_SECOND));
 
             tenant2Connection.createStatement().execute(
                     String.format(ddl, tenantViewName3, globalViewName1, VIEW_PREFIX1,
-                            PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                            PHOENIX_TTL_EXPIRE_IN_A_SECOND));
             tenant2Connection.createStatement().execute(
                     String.format(ddl, tenantViewName4, globalViewName2, VIEW_PREFIX2,
-                            PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                            PHOENIX_TTL_EXPIRE_IN_A_SECOND));
+
+            tenant1Connection.setAutoCommit(true);
+            tenant2Connection.setAutoCommit(true);
 
             tenant1Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName1));
-            tenant1Connection.commit();
             tenant1Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName2));
-            tenant1Connection.commit();
             tenant2Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName3));
-            tenant2Connection.commit();
             tenant2Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName4));
-            tenant2Connection.commit();
+
+            // wait the row to be expired and index to be updated
+            Thread.sleep(PHOENIX_TTL_EXPIRE_IN_A_SECOND * MILLISECOND);
 
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + tenant1 + ".*", 2);
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + tenant2 + ".*", 2);
@@ -658,8 +686,8 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
             int status = phoenixTtlTool.run(new String[]{"-runfg", "-i", tenant1});
             assertEquals(0, status);
 
-            verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + tenant1 + ".*", 0);
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + tenant2 + ".*", 2);
+            verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + tenant1 + ".*", 0);
         }
     }
 
@@ -693,9 +721,9 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
                     " AS SELECT * FROM " + baseTableFullName + " WHERE NUM = %d PHOENIX_TTL = %d";
 
             globalConn.createStatement().execute(
-                    String.format(ddl, globalViewName1, 1, PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                    String.format(ddl, globalViewName1, 1, PHOENIX_TTL_EXPIRE_IN_A_SECOND));
             globalConn.createStatement().execute(
-                    String.format(ddl, globalViewName2, 2, PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                    String.format(ddl, globalViewName2, 2, PHOENIX_TTL_EXPIRE_IN_A_SECOND));
 
             ddl = "CREATE VIEW %s (E BIGINT, F BIGINT) AS SELECT * FROM %s WHERE ID = '%s'";
             tenant1Connection.createStatement().execute(
@@ -708,19 +736,20 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
             tenant2Connection.createStatement().execute(
                     String.format(ddl, tenantViewName4, globalViewName2, VIEW_PREFIX2));
 
+            tenant1Connection.setAutoCommit(true);
+            tenant2Connection.setAutoCommit(true);
+
             tenant1Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName1));
-            tenant1Connection.commit();
             tenant1Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName2));
-            tenant1Connection.commit();
-
             tenant2Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName3));
-            tenant2Connection.commit();
             tenant2Connection.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, tenantViewName4));
-            tenant2Connection.commit();
+
+            // wait the row to be expired and index to be updated
+            Thread.sleep(PHOENIX_TTL_EXPIRE_IN_A_SECOND * MILLISECOND);
 
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX1 + ".*", 2);
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX2 + ".*", 2);
@@ -732,8 +761,8 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
             int status = phoenixTtlTool.run(new String[]{"-runfg", "-v", globalViewName1});
             assertEquals(0, status);
 
-            verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX1 + ".*", 0);
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX2 + ".*", 2);
+            verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX1 + ".*", 0);
         }
     }
 
@@ -771,7 +800,7 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
 
             globalConn.createStatement().execute(String.format(middleLevelViewDdl,
                     middleLevelViewName1, globalViewName,
-                    VIEW_PREFIX1, PHOENIX_TTL_EXPIRE_IN_A_MILLISECOND));
+                    VIEW_PREFIX1, PHOENIX_TTL_EXPIRE_IN_A_SECOND));
             globalConn.createStatement().execute(String.format(middleLevelViewDdl,
                     middleLevelViewName2, globalViewName, VIEW_PREFIX2,
                     PHOENIX_TTL_EXPIRE_IN_A_DAY));
@@ -784,12 +813,15 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
             globalConn.createStatement().execute(String.format(leafViewDdl,
                     leafViewName2, middleLevelViewName2));
 
+            globalConn.setAutoCommit(true);
+
             globalConn.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, leafViewName1));
-            globalConn.commit();
             globalConn.createStatement().execute(
                     String.format(UPSERT_TO_LEAF_VIEW_QUERY, leafViewName2));
-            globalConn.commit();
+
+            // wait the row to be expired and index to be updated
+            Thread.sleep(PHOENIX_TTL_EXPIRE_IN_A_SECOND * MILLISECOND);
 
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX1 + ".*", 1);
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX2 + ".*", 1);
@@ -800,11 +832,10 @@ public class PhoenixTTLToolIT extends ParallelStatsDisabledIT {
             phoenixTtlTool.setConf(conf);
             int status = phoenixTtlTool.run(new String[]{"-runfg", "-a"});
             assertEquals(0, status);
-            verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX1 + ".*", 0);
             verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX2 + ".*", 1);
+            verifyNumberOfRowsFromHBaseLevel(baseTableFullName, ".*" + VIEW_PREFIX1 + ".*", 0);
         }
     }
-
 
     @Test
     public void testNoViewCase() throws Exception {
